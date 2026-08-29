@@ -1,0 +1,14 @@
+services:
+  madplan:
+    build: .
+    container_name: madplan
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8099:8099"
+    environment:
+      DATA_DIR: /data
+      CONFIG_DIR: /config
+    volumes:
+      - ./data:/data
+      - ./config:/config

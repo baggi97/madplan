@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block titel %}Madplan uge {{ ugenr }}{% endblock %}
+
+{% block indhold %}
+{% set plan = uge.madplan %}
+{% set antal_varer = plan.indkoebsliste|map(attribute='varer')|map('length')|sum %}
+
+<div class="hoved">
+  <p class="oejenbryn">Uge {{ ugenr }}</p>
+  <h1>Madplanen er klar</h1>
+  <p class="under">{{ plan.opskrifter|length }} retter · {{ antal_varer }} varer at købe</p>
+</div>
+
+<div class="faner" role="tablist">
+  <button class="fane er-aktiv" role="tab" data-fane="indkoeb" aria-selected="true">Indkøb</button>
+  <button class="fane" role="tab" data-fane="opskrifter" aria-selected="false">Opskrifter</button>
+</div>
+
+<section id="fane-indkoeb" class="fanepanel er-aktiv" role="tabpanel">
+  <p class="fremskridt" data-fremskridt data-i-alt="{{ antal_varer }}">
+    <strong>{{ uge.afkrydset|length }}</strong> af {{ antal_varer }} i kurven
+  </p>
+
+  {% for gruppe in plan.indkoebsliste %}
+  {% set gi = loop.index0 %}
+  <div class="afdeling">
+    <h2 class="afdeling-navn">{{ gruppe.afdeling }}</h2>
+    <ul class="liste">
+      {% for vare in gruppe.varer %}
+      {% set noegle = 'g' ~ gi ~ 'v' ~ loop.index0 %}
+      <li>
+        <label class="linje {% if uge.afkrydset.get(noegle) %}er-krydset{% endif %}">
+          <input type="checkbox" data-vare="{{ noegle }}"
+                 {% if uge.afkrydset.get(noegle) %}checked{% endif %}>
+          <span class="boks" aria-hidden="true"></span>
+          <span class="linje-tekst">{{ vare.vare }}</span>
+          {% if vare.paa_tilbud %}<span class="mini-skilt">tilbud</span>{% endif %}
+        </label>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endfor %}
+
+  <button class="knap knap-sekundaer knap-bred" data-handling="nulstil-kryds">
+    Ryd afkrydsninger
+  </button>
+</section>
+
+<section id="fane-opskrifter" class="fanepanel" role="tabpanel" hidden>
+  {% for opskrift in plan.opskrifter %}
+  <article class="opskrift">
+    <header class="opskrift-top">
+      <h2>{{ opskrift.navn }}</h2>
+      <p class="opskrift-meta">{{ opskrift.portioner }} portioner · {{ opskrift.tid_min }} min</p>
+    </header>
+
+    <h3 class="delnavn">Ingredienser</h3>
+    <ul class="ingredienser">
+      {% for i in opskrift.ingredienser %}<li>{{ i }}</li>{% endfor %}
+    </ul>
+
+    <h3 class="delnavn">Fremgangsmåde</h3>
+    <ol class="trin">
+      {% for t in opskrift.fremgangsmaade %}<li>{{ t }}</li>{% endfor %}
+    </ol>
+
+    {% if opskrift.tip %}<p class="tip">{{ opskrift.tip }}</p>{% endif %}
+  </article>
+  {% endfor %}
+</section>
+
+{% if er_denne_uge %}
+<div class="omgoer">
+  <button class="knap knap-sekundaer" data-handling="hent-forslag" data-gennemtving="1">
+    Hent nye forslag
+  </button>
+  <p class="omgoer-note">Erstatter ugens plan med 10 nye forslag.</p>
+</div>
+{% endif %}
+{% endblock %}

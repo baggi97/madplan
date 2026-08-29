@@ -1,0 +1,39 @@
+# Denne fil styrer hvordan forslagene rammer. Ret den til jeres husstand —
+# det er her systemet går fra generisk til jeres.
+
+antal_personer: 4
+
+# Ting der aldrig må foreslås
+allergier:
+  - nødder
+
+# Ting I ikke gider, uden at det er en allergi
+kan_vi_ikke_lide:
+  - leverpostej
+  - blomkål
+
+# Hvad I gerne vil have mere af
+oensker:
+  - mindst én vegetarisk ret om ugen
+  - gerne fisk en gang imellem
+  - børnevenligt, ikke for stærkt
+
+# Praktiske rammer
+hverdag_maks_minutter: 30
+weekend_maks_minutter: 75
+
+# Basisvarer I altid har hjemme — kommer ikke på indkøbslisten
+har_altid_hjemme:
+  - ris
+  - pasta
+  - løg
+  - hvidløg
+  - dåsetomater
+  - olivenolie
+  - mel
+  - bouillonterninger
+
+# Fritekst der sendes med til modellen. Skriv hvad som helst her.
+noter: >
+  Vi spiser omkring kl. 18. Den ene voksne arbejder sent om torsdagen,
+  så noget der kan varmes op er godt der. Rester til madpakker er et plus.

@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block titel %}Vælg ugens retter{% endblock %}
+
+{% block indhold %}
+
+{% if uge.status == 'fejl' %}
+<div class="besked besked-fejl">
+  <h2>Der kom ingen forslag</h2>
+  <p>{{ uge.fejlbesked }}</p>
+  <button class="knap knap-sekundaer" data-handling="hent-forslag" data-gennemtving="1">Prøv igen</button>
+</div>
+{% endif %}
+
+<div class="arbejder-boks" {% if not arbejder %}hidden{% endif %}>
+  <div class="spinner" aria-hidden="true"></div>
+  <p class="arbejder-tekst">Kigger ugens tilbud igennem…</p>
+  <p class="arbejder-under">Det tager typisk et halvt minut.</p>
+</div>
+
+{% if uge.forslag %}
+<div class="hoved" {% if arbejder %}hidden{% endif %}>
+  <p class="oejenbryn">{{ uge.forslag|length }} forslag fra ugens tilbud</p>
+  <h1>Hvad skal vi have?</h1>
+  <p class="under">Tryk på de retter I vil have. Alle i huset kan vælge fra hver sin telefon.</p>
+</div>
+
+<ul class="retter" {% if arbejder %}hidden{% endif %}>
+  {% for ret in uge.forslag %}
+  <li>
+    <button class="ret {% if ret.valgt %}er-valgt{% endif %}"
+            data-idx="{{ ret.idx }}"
+            aria-pressed="{{ 'true' if ret.valgt else 'false' }}">
+      <span class="ret-tjek" aria-hidden="true"></span>
+
+      <span class="ret-krop">
+        <span class="ret-navn">{{ ret.navn }}</span>
+        <span class="ret-beskrivelse">{{ ret.beskrivelse }}</span>
+
+        <span class="ret-fakta">
+          <span class="fakta">{{ ret.tid_min }} min</span>
+          {% if ret.spar > 0 %}<span class="fakta fakta-spar">Spar {{ ret.spar }} kr.</span>{% endif %}
+        </span>
+
+        {% if ret.varer %}
+        <span class="varer">
+          {% for v in ret.varer %}
+          <span class="vare">
+            {{ v.navn }}
+            <span class="vare-rabat">&minus;{{ v.rabat_pct }}%</span>
+          </span>
+          {% endfor %}
+        </span>
+        {% endif %}
+      </span>
+
+      <span class="skilt">
+        <span class="skilt-tal">{{ ret.pris_pr_portion|round|int }}</span>
+        <span class="skilt-enhed">kr/pers</span>
+      </span>
+    </button>
+  </li>
+  {% endfor %}
+</ul>
+{% elif uge.status != 'fejl' and not arbejder %}
+<div class="besked">
+  <h2>Ingen forslag endnu</h2>
+  <p>Forslagene kommer af sig selv søndag morgen. Du kan også hente dem nu.</p>
+  <button class="knap" data-handling="hent-forslag">Hent ugens forslag</button>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block bundbjaelke %}
+{% if uge.forslag %}
+<div class="bundbjaelke" {% if arbejder %}hidden{% endif %}>
+  <div class="bundbjaelke-inder">
+    <p class="taeller"><strong data-taeller>{{ antal_valgt }}</strong> valgt</p>
+    <button class="knap" data-handling="lav-madplan" {% if antal_valgt == 0 %}disabled{% endif %}>
+      Lav madplanen
+    </button>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

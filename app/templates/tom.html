@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block titel %}Madplan{% endblock %}
+
+{% block indhold %}
+<div class="besked besked-tom">
+  <p class="oejenbryn">Uge {{ ugenr }}</p>
+  <h1>Ingen forslag endnu</h1>
+  <p>Hver søndag morgen henter Madplan ugens tilbud i REMA og foreslår ti retter
+     bygget op om dem. Vil du ikke vente, så hent dem nu.</p>
+  <button class="knap" data-handling="hent-forslag">Hent ugens forslag</button>
+</div>
+
+<div class="arbejder-boks" hidden>
+  <div class="spinner" aria-hidden="true"></div>
+  <p class="arbejder-tekst">Kigger ugens tilbud igennem…</p>
+  <p class="arbejder-under">Det tager typisk et halvt minut.</p>
+</div>
+{% endblock %}

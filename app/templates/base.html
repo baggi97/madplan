@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#12233d">
+<title>{% block titel %}Madplan{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body data-uge="{{ uge.uge }}">
+
+<header class="top">
+  <div class="top-inner">
+    <a class="maerke" href="/">
+      <span class="maerke-ord">Madplan</span>
+    </a>
+    <div class="top-hoejre">
+      <span class="ugemaerke">Uge {{ ugenr }}</span>
+      {% if alle_uger|length > 1 %}
+      <select class="ugevaelger" onchange="location.href='/uge/'+this.value" aria-label="Skift uge">
+        {% for u in alle_uger %}
+        <option value="{{ u }}" {% if u == uge.uge %}selected{% endif %}>Uge {{ u.split('-W')[1]|int }} · {{ u.split('-W')[0] }}</option>
+        {% endfor %}
+      </select>
+      {% endif %}
+    </div>
+  </div>
+</header>
+
+<main class="side">
+  {% block indhold %}{% endblock %}
+</main>
+
+<footer class="bund-tekst">
+  <p>Tilbud fra REMA 1000. Priser kan afvige i din butik.</p>
+</footer>
+
+{% block bundbjaelke %}{% endblock %}
+
+<script src="/static/app.js"></script>
+{% block script %}{% endblock %}
+</body>
+</html>
