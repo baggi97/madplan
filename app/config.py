@@ -43,6 +43,14 @@ ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
+# --- Push-beskeder (valgfrit) -----------------------------------------
+# Lav et nøglepar med:  python -m app.push
+# Kræver HTTPS på websitet — se README. Tomme nøgler slår push fra.
+VAPID_OFFENTLIG_NOEGLE = os.getenv("VAPID_OFFENTLIG_NOEGLE", "")
+VAPID_PRIVAT_NOEGLE = os.getenv("VAPID_PRIVAT_NOEGLE", "")
+# Push-tjenesten kræver en kontaktadresse den kan skrive til ved problemer
+VAPID_KONTAKT = os.getenv("VAPID_KONTAKT", "mailto:madplan@eksempel.dk")
+
 # --- Tidsplan ("ugedag time", lokal tid) ------------------------------
 FORSLAG_CRON = os.getenv("FORSLAG_CRON", "sun 8")
 DEADLINE_CRON = os.getenv("DEADLINE_CRON", "sun 18")

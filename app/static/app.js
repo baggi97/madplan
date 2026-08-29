@@ -243,3 +243,84 @@ async function poll() {
 }
 
 if (document.querySelector(".arbejder-boks:not([hidden])")) poll();
+
+/* --- Push-beskeder --------------------------------------------------- */
+
+/* Kræver sikker kontekst. På http:// findes serviceWorker slet ikke i
+   browseren, og så skjuler vi hele afsnittet frem for at love noget vi
+   ikke kan holde. */
+
+const pushBoks = document.querySelector("[data-push]");
+
+function base64TilBytes(b64) {
+  const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+  const raa = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(raa, (c) => c.charCodeAt(0));
+}
+
+function visPush(tekst, knaptekst, deaktiveret) {
+  pushBoks.querySelector("[data-push-under]").textContent = tekst;
+  const knap = pushBoks.querySelector("[data-push-knap]");
+  knap.textContent = knaptekst;
+  knap.disabled = Boolean(deaktiveret);
+}
+
+async function opsaetPush() {
+  if (!pushBoks) return;
+
+  const muligt =
+    "serviceWorker" in navigator && "PushManager" in window && window.isSecureContext;
+  if (!muligt) return; // afsnittet forbliver skjult
+
+  let reg;
+  try {
+    reg = await navigator.serviceWorker.register("/sw.js");
+  } catch (e) {
+    return; // uden worker ingen push — sig ikke noget, det er ikke brugerens skyld
+  }
+
+  const svar = await fetch("/api/push/noegle").then((r) => r.json());
+  if (!svar.slaaet_til || !svar.noegle) return;
+
+  pushBoks.hidden = false;
+  let abonnement = await reg.pushManager.getSubscription();
+
+  if (Notification.permission === "denied") {
+    visPush("Beskeder er blokeret for dette website i browserens indstillinger.", "Blokeret", true);
+    return;
+  }
+  if (abonnement) visPush("Beskeder er slået til på denne enhed.", "Slå fra");
+
+  pushBoks.querySelector("[data-push-knap]").addEventListener("click", async () => {
+    const knap = pushBoks.querySelector("[data-push-knap]");
+    knap.disabled = true;
+    try {
+      if (abonnement) {
+        await send("/api/push/afmeld", { endpoint: abonnement.endpoint });
+        await abonnement.unsubscribe();
+        abonnement = null;
+        visPush("Søndag morgen, når ugens tilbud er hentet.", "Slå til");
+        varsel("Beskeder slået fra");
+      } else {
+        const lov = await Notification.requestPermission();
+        if (lov !== "granted") {
+          visPush("Du sagde nej til beskeder. Slå dem til i browserens indstillinger.", "Slå til");
+          return;
+        }
+        abonnement = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: base64TilBytes(svar.noegle),
+        });
+        await send("/api/push/abonner", abonnement.toJSON());
+        visPush("Beskeder er slået til på denne enhed.", "Slå fra");
+        varsel("Beskeder slået til");
+      }
+    } catch (e) {
+      varsel(e.message || "Kunne ikke ændre beskeder");
+    } finally {
+      knap.disabled = false;
+    }
+  });
+}
+
+opsaetPush();

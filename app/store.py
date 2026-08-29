@@ -120,6 +120,36 @@ def tilfoej_historik(
     _skriv("historik.json", hist)
 
 
+# --- push-abonnementer ------------------------------------------------
+
+def hent_abonnementer() -> list[dict]:
+    """Browserne der har sagt ja til push. Én post pr. browser, ikke pr. person."""
+    return _laes("abonnementer.json", [])
+
+
+def gem_abonnementer(abonnementer: list[dict]) -> None:
+    _skriv("abonnementer.json", abonnementer)
+
+
+def tilfoej_abonnement(abonnement: dict) -> bool:
+    """Returnerer True hvis det var nyt. Endpoint'et er browserens identitet."""
+    alle = hent_abonnementer()
+    if any(a.get("endpoint") == abonnement.get("endpoint") for a in alle):
+        return False
+    alle.append(abonnement)
+    gem_abonnementer(alle)
+    return True
+
+
+def fjern_abonnement(endepunkt: str) -> bool:
+    alle = hent_abonnementer()
+    tilbage = [a for a in alle if a.get("endpoint") != endepunkt]
+    if len(tilbage) == len(alle):
+        return False
+    gem_abonnementer(tilbage)
+    return True
+
+
 def seneste_retter(antal_uger: int = 6) -> list[str]:
     """Retter serveret for nylig — bruges til at undgå gentagelser."""
     navne: list[str] = []

@@ -36,6 +36,7 @@ app/flow.py     ugens forløb, orkestrering
 app/web.py      FastAPI: sider + JSON-endpoints
 app/store.py    filbaseret state, én JSON-fil pr. uge
 app/notify.py   valgfri Telegram-besked
+app/push.py     valgfri Web Push til telefonerne
 app/main.py     uvicorn + APScheduler i samme proces
 app/config.py   miljøvariabler + indlæsning af praeferencer.yaml
 
@@ -137,6 +138,36 @@ så state og præferencer overlever en opdatering.
 
 Dockerfilen har et `HEALTHCHECK` mod `/sundhedstjek`. Det bruger stdlib i
 stedet for `curl`, så imaget ikke skal vokse med en pakke mere.
+
+### Push-beskeder
+
+To uafhængige kanaler siger til når noget er klar: `notify.send()` (Telegram)
+og `push.send()` (Web Push). Begge er valgfri og gør ingenting hvis deres
+nøgler er tomme. `flow.py` kalder dem side om side.
+
+**Push kræver HTTPS.** Service workers og Push API'et findes ikke i browseren
+uden for sikker kontekst. På `http://<NAS-IP>:8099` er `navigator.serviceWorker`
+`undefined`, og `app.js` skjuler hele afsnittet frem for at love noget den ikke
+kan holde. Kun `localhost` regnes også for sikker.
+
+**`sw.js` serveres fra roden, ikke fra `/static/`.** En service workers scope
+er den mappe den ligger i — fra `/static/sw.js` ville den aldrig se resten af
+websitet. Derfor er der en rute i `web.py` der leverer filen på `/sw.js`.
+
+Workeren cacher **ikke** noget. Det er bevidst: siden er server-renderet, og en
+cache ville betyde at nogen kunne stå i butikken med en gammel indkøbsliste.
+
+`store.abonnementer.json` har én post pr. browser, ikke pr. person — samme
+telefon i to browsere er to abonnementer. Endpoint'et er identiteten. Svarer
+push-tjenesten 404 eller 410, er abonnementet dødt (telefon nulstillet, app
+fjernet, beskeder slået fra), og `push.send()` rydder det væk selv.
+
+`LEVETID` sætter TTL på beskeden. Standarden i protokollen er 0, altså "lever
+nu eller smid væk" — og så ville en telefon der lå slukket søndag morgen aldrig
+få beskeden.
+
+VAPID-nøglerne laves med `python -m app.push`. Den private er en hemmelighed og
+hører i `.env`; skifter man den, skal alle abonnenter tilmelde sig igen.
 
 ## Verificerede fakta om datakilden
 

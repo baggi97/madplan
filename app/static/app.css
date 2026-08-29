@@ -674,3 +674,30 @@ li { list-style: none; }
 
 .fremskridt.er-faerdig { color: var(--groen); }
 .fremskridt.er-faerdig strong { color: var(--groen); }
+
+/* --- push-beskeder --------------------------------------------------- */
+
+.push {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 32px;
+  padding: 16px;
+  background: var(--kort);
+  border: 1.5px solid var(--linje);
+  border-radius: var(--radius);
+  box-shadow: var(--skygge);
+}
+
+.push-tekst { min-width: 0; flex: 1; }
+
+.push-titel { display: block; font-size: .98rem; }
+
+.push-under {
+  display: block;
+  margin-top: 3px;
+  color: var(--blaek-mild);
+  font-size: .86rem;
+}
+
+.push .knap { flex: none; border: 1.5px solid var(--blaek); }

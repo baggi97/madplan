@@ -6,11 +6,11 @@ import logging
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import config, flow, store
+from . import config, flow, push, store
 
 log = logging.getLogger(__name__)
 
@@ -227,6 +227,71 @@ async def nulstil_kryds(noegle: str):
     uge["afkrydset"] = {}
     store.gem_uge(uge)
     return {"antal": 0}
+
+
+# --- Push -------------------------------------------------------------
+#
+# Service workeren SKAL serveres fra roden. Ligger den på /static/sw.js,
+# gælder den kun for /static/ og ser aldrig resten af websitet.
+
+@app.get("/sw.js")
+async def service_worker():
+    return FileResponse(
+        HER / "static" / "sw.js",
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+@app.get("/manifest.json")
+async def manifest():
+    return FileResponse(HER / "static" / "manifest.json", media_type="application/manifest+json")
+
+
+@app.get("/api/push/noegle")
+async def push_noegle():
+    """Den offentlige VAPID-nøgle browseren skal abonnere med."""
+    return {
+        "noegle": config.VAPID_OFFENTLIG_NOEGLE,
+        "slaaet_til": push.slaaet_til(),
+    }
+
+
+@app.post("/api/push/abonner")
+async def push_abonner(krop: dict):
+    if not push.slaaet_til():
+        return JSONResponse(
+            {"fejl": "Push er ikke sat op på serveren. Se VAPID-nøglerne i .env."},
+            status_code=503,
+        )
+    if not str(krop.get("endpoint", "")).startswith("https://"):
+        return JSONResponse({"fejl": "Ugyldigt abonnement"}, status_code=400)
+    if not (krop.get("keys") or {}).get("p256dh"):
+        return JSONResponse({"fejl": "Abonnementet mangler nøgler"}, status_code=400)
+
+    ny = store.tilfoej_abonnement(
+        {"endpoint": krop["endpoint"], "keys": krop["keys"]}
+    )
+    log.info("Push-abonnement %s", "tilføjet" if ny else "fandtes allerede")
+    return {"ny": ny, "antal": len(store.hent_abonnementer())}
+
+
+@app.post("/api/push/afmeld")
+async def push_afmeld(krop: dict):
+    fjernet = store.fjern_abonnement(str(krop.get("endpoint", "")))
+    return {"fjernet": fjernet, "antal": len(store.hent_abonnementer())}
+
+
+@app.post("/api/push/proeve")
+async def push_proeve():
+    """Sender en prøvebesked, så man kan se at det virker uden at vente til
+    søndag."""
+    if not push.slaaet_til():
+        return JSONResponse({"fejl": "Push er ikke sat op på serveren."}, status_code=503)
+    if not store.hent_abonnementer():
+        return JSONResponse({"fejl": "Ingen har slået beskeder til endnu."}, status_code=400)
+    await push.send("Madplan", "Sådan ser en besked ud. Alt virker.", "/")
+    return {"sendt": len(store.hent_abonnementer())}
 
 
 @app.get("/sundhedstjek")

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% block titel %}Madplan uge {{ ugenr }}{% endblock %}
+{% block titel %}Madplan uge {{ ugenr }}
+{% endblock %}
 
 {% block indhold %}
 {% set plan = uge.madplan %}
@@ -78,4 +79,12 @@
   <p class="omgoer-note">Erstatter ugens plan med 10 nye forslag.</p>
 </div>
 {% endif %}
+<section class="push" data-push hidden>
+  <div class="push-tekst">
+    <strong class="push-titel">Få besked når der er nye forslag</strong>
+    <span class="push-under" data-push-under>Søndag morgen, når ugens tilbud er hentet.</span>
+  </div>
+  <button class="knap knap-sekundaer" data-push-knap>Slå til</button>
+</section>
+
 {% endblock %}

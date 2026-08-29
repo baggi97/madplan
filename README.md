@@ -56,6 +56,42 @@ fiskeret".
 Antal personer sættes pr. ret i websitet — `standard_portioner` i YAML'en er
 kun startværdien. Så kan en uge tage højde for hvem der er hjemme.
 
+### Push-beskeder (valgfrit)
+
+Familien kan få en notifikation på telefonen når ugens forslag er klar, og når
+madplanen er skrevet. Websitet lægges på hjemmeskærmen, og så opfører det sig
+som en app.
+
+**Det kræver HTTPS.** Service workers og Push API'et virker kun i sikker
+kontekst. `http://<NAS-IP>:8099` er ikke nok — browseren nægter simpelthen, og
+knappen "Få besked" dukker slet ikke op. På en Synology er den nemmeste vej:
+
+1. Kontrolpanel → Eksterne adgang → **DDNS** → opret et gratis
+   `noget.synology.me`-navn
+2. Kontrolpanel → Sikkerhed → **Certifikat** → hent et Let's Encrypt-certifikat
+   til navnet
+3. Kontrolpanel → Login-portal → **Omvendt proxy** → send
+   `https://noget.synology.me` videre til `localhost:8099`
+
+Sæt derefter `BASE_URL=https://noget.synology.me` i `.env`.
+
+Lav så et nøglepar og læg det i `.env`:
+
+```bash
+docker exec madplan python -m app.push
+```
+
+Genstart containeren, åbn websitet over HTTPS, og tryk **Slå til** nederst på
+siden.
+
+På iPhone skal siden lægges på hjemmeskærmen først (Del → Føj til hjemmeskærm)
+— Safari tillader kun push fra en installeret webapp. På Android og desktop
+virker det direkte i browseren.
+
+Hver browser tæller som sin egen modtager, så alle i huset kan slå det til på
+hver sin telefon. Siger en telefon nej, eller bliver appen fjernet, rydder
+serveren selv abonnementet væk næste gang der sendes.
+
 ### Telegram (valgfrit)
 
 Uden det virker alt — I skal bare selv huske at åbne websitet om søndagen.
