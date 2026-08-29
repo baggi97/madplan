@@ -3,16 +3,16 @@
 #
 # Websitet efter deploy:  http://<NAS-IP>:8099
 #
-# Alt bor i /docker/madplan på NAS'en:
-#   /docker/madplan/.env                      ANTHROPIC_API_KEY=sk-ant-...
-#   /docker/madplan/config/praeferencer.yaml  husstandens smag
-#   /docker/madplan/data/                     ugerne og historikken
+# Alt bor i /volume1/docker/madplan på NAS'en:
+#   /volume1/docker/madplan/.env                      ANTHROPIC_API_KEY=sk-ant-...
+#   /volume1/docker/madplan/config/praeferencer.yaml  husstandens smag
+#   /volume1/docker/madplan/data/                     ugerne og historikken
 services:
   madplan:
     image: ghcr.io/baggi97/madplan:latest
     container_name: madplan
     restart: unless-stopped
-    env_file: /docker/madplan/.env
+    env_file: /volume1/docker/madplan/.env
     environment:
       DATA_DIR: /data
       CONFIG_DIR: /config
@@ -20,9 +20,9 @@ services:
       - "8099:8099"
     volumes:
       # Ugerne og historikken skal overleve en opdatering
-      - /docker/madplan/data:/data
+      - /volume1/docker/madplan/data:/data
       # Præferencerne redigeres på NAS'en, ikke i imaget
-      - /docker/madplan/config:/config
+      - /volume1/docker/madplan/config:/config
     labels:
       # Kun denne container opdateres automatisk — dine andre NAS-containere
       # bliver ikke rørt.

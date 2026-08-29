@@ -121,12 +121,12 @@ kører NAS'en den nye version.
    `madplan` → **Package settings** → **Change visibility** → *Public*.
    Vil du hellere holde det privat, så kør `docker login ghcr.io` på NAS'en
    med et personal access token der har `read:packages`.
-3. På NAS'en, læg tingene i `/docker/madplan`:
+3. På NAS'en, læg tingene i `/volume1/docker/madplan`:
 
    ```
-   /docker/madplan/.env                       # ANTHROPIC_API_KEY=sk-ant-...
-   /docker/madplan/config/praeferencer.yaml   # husstandens smag
-   /docker/madplan/data/                      # ugerne, oprettes af sig selv
+   /volume1/docker/madplan/.env                       # ANTHROPIC_API_KEY=sk-ant-...
+   /volume1/docker/madplan/config/praeferencer.yaml   # husstandens smag
+   /volume1/docker/madplan/data/                      # ugerne, oprettes af sig selv
    ```
 
 4. Synology Container Manager → **Project** → peg på
