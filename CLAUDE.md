@@ -209,6 +209,16 @@ ingen ekstra afhængighed. Installér ikke `anthropic`-pakken for at gøre
 og overskrivelig med `ANTHROPIC_MODEL`. To kald om ugen koster i
 størrelsesordenen 30 kr. om året; `claude-opus-5` er ~2,5× det.
 
+**Forbigående fejl gentages.** `ai._kald()` prøver op til `FORSOEG` gange med
+voksende pause ved 429 og 5xx samt netværks- og timeoutfejl, og respekterer
+`retry-after`. 4xx gentages **ikke** — en forkert nøgle bliver ikke rigtig af
+at spørge igen. `SAMLET_FRIST` sætter loft over hvor længe der samlet prøves,
+så websitet ikke står med en spinner i et kvarter.
+
+Det er ikke pyntearbejde: den ugentlige kørsel er søndag kl. 8, og går den i
+fejl, står madplanen tom til nogen opdager det. Vi ramte 2026-08-29 en 503
+"credential validation failed" hvor nøglen var helt i orden.
+
 **Fejl oversættes.** `ai._fejlbesked()` graver Anthropic's egen besked ud og
 oversætter de almindelige tilfælde (ugyldig nøgle, tom konto, hastighedsgrænse)
 til dansk. Brug ikke `raise_for_status()` her — den giver kun

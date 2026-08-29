@@ -9,6 +9,7 @@ siden på et tilbud der ikke findes.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -139,6 +140,30 @@ VAERKTOEJ_MADPLAN = {
 }
 
 
+# Forbigående fejl må ikke koste hele ugen. Den ugentlige kørsel er søndag
+# kl. 8, og går den i fejl, står madplanen tom til nogen opdager det. Set i
+# praksis: en 503 "credential validation failed" hvor nøglen var helt i orden.
+FORSOEG = 3
+PAUSER = (3, 12)          # sekunder mellem forsøg
+SAMLET_FRIST = 300        # start ikke et nyt forsøg efter så mange sekunder
+
+
+def _forbigaaende(r: httpx.Response) -> bool:
+    """429 og 5xx går som regel væk af sig selv. 4xx gør ikke."""
+    return r.status_code == 429 or r.status_code >= 500
+
+
+def _pause(nr: int, r: "httpx.Response | None") -> float:
+    if r is not None:
+        efter = r.headers.get("retry-after")
+        if efter:
+            try:
+                return min(float(efter), 60.0)
+            except ValueError:
+                pass
+    return PAUSER[min(nr, len(PAUSER) - 1)]
+
+
 async def _kald(system: str, besked: str, vaerktoej: dict, maks_tokens: int) -> dict:
     krop = {
         "model": config.ANTHROPIC_MODEL,
@@ -148,22 +173,48 @@ async def _kald(system: str, besked: str, vaerktoej: dict, maks_tokens: int) -> 
         "tools": [vaerktoej],
         "tool_choice": {"type": "tool", "name": vaerktoej["name"]},
     }
-    try:
-        async with httpx.AsyncClient(timeout=180) as client:
-            r = await client.post(
-                config.ANTHROPIC_URL,
-                headers={**HEADERS, "x-api-key": config.ANTHROPIC_API_KEY},
-                json=krop,
+    hoveder = {**HEADERS, "x-api-key": config.ANTHROPIC_API_KEY}
+    start = asyncio.get_event_loop().time()
+    sidste = None
+
+    for nr in range(FORSOEG):
+        if nr:
+            pause = _pause(nr - 1, sidste if isinstance(sidste, httpx.Response) else None)
+            if asyncio.get_event_loop().time() - start + pause > SAMLET_FRIST:
+                log.error("Opgiver — samlet frist på %d s er brugt", SAMLET_FRIST)
+                break
+            log.warning(
+                "Forsøg %d af %d mislykkedes — prøver igen om %.0f s", nr, FORSOEG, pause
             )
-    except httpx.TimeoutException:
-        raise RuntimeError(
-            "Anthropic svarede ikke inden for tre minutter. Prøv igen."
-        ) from None
+            await asyncio.sleep(pause)
 
-    if r.status_code >= 400:
-        raise RuntimeError(_fejlbesked(r))
+        try:
+            async with httpx.AsyncClient(timeout=180) as client:
+                r = await client.post(config.ANTHROPIC_URL, headers=hoveder, json=krop)
+        except httpx.TransportError as e:      # timeout og netværksfejl
+            sidste = e
+            continue
 
-    for blok in r.json().get("content", []):
+        if _forbigaaende(r):
+            log.error("Anthropic-fejl %s: %s", r.status_code, r.text[:300])
+            sidste = r
+            continue
+        if r.status_code >= 400:
+            raise RuntimeError(_fejlbesked(r))  # blivende — nytter ikke at prøve igen
+
+        return _udtraek_vaerktoej(r.json())
+
+    if isinstance(sidste, httpx.Response):
+        raise RuntimeError(_fejlbesked(sidste))
+    raise RuntimeError(
+        "Kunne ikke nå Anthropic efter {} forsøg ({}). Tjek nettet og prøv igen.".format(
+            FORSOEG, type(sidste).__name__ if sidste else "ukendt"
+        )
+    )
+
+
+def _udtraek_vaerktoej(svar: dict) -> dict:
+    for blok in svar.get("content", []):
         if blok.get("type") == "tool_use":
             return blok["input"]
     raise RuntimeError("Modellen returnerede ikke det forventede værktøjskald")
