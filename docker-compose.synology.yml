@@ -3,6 +3,9 @@
 #
 # Websitet efter deploy:  http://<NAS-IP>:8099
 #
+# Kør altid fra mappen med filen — .env findes relativt:
+#   cd /volume1/docker/madplan && sudo docker-compose -f docker-compose.synology.yml up -d
+#
 # Alt bor i /volume1/docker/madplan på NAS'en:
 #   /volume1/docker/madplan/.env                      ANTHROPIC_API_KEY=sk-ant-...
 #   /volume1/docker/madplan/config/praeferencer.yaml  husstandens smag
@@ -12,8 +15,22 @@ services:
     image: ghcr.io/baggi97/madplan:latest
     container_name: madplan
     restart: unless-stopped
-    env_file: /volume1/docker/madplan/.env
+    # Bevidst IKKE env_file. Compose indlæser selv .env fra mappen ved siden
+    # af compose-filen til variabel-substitution, og på DSM's Compose v1 nåede
+    # env_file ikke ind i containeren. Her læses værdierne direkte i stedet,
+    # med fornuftige standarder hvis de ikke står i .env.
     environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5}
+      TZ: ${TZ:-Europe/Copenhagen}
+      BASE_URL: ${BASE_URL:-}
+      TELEGRAM_TOKEN: ${TELEGRAM_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      FORSLAG_CRON: ${FORSLAG_CRON:-sun 8}
+      DEADLINE_CRON: ${DEADLINE_CRON:-sun 18}
+      ANTAL_FORSLAG: ${ANTAL_FORSLAG:-10}
+      ANTAL_RETTER: ${ANTAL_RETTER:-5}
+      # Containeren lytter altid på 8099 — porten mappes udefra herunder
       DATA_DIR: /data
       CONFIG_DIR: /config
     ports:

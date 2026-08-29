@@ -129,9 +129,17 @@ kører NAS'en den nye version.
    /volume1/docker/madplan/data/                      # ugerne, oprettes af sig selv
    ```
 
-4. Synology Container Manager → **Project** → peg på
-   `docker-compose.synology.yml`. Stierne i filen er absolutte, så projektet
-   kan ligge hvor som helst.
+4. Start den. Volumes bruger absolutte stier, men `.env` læses relativt, så
+   kør altid fra mappen:
+
+   ```bash
+   cd /volume1/docker/madplan
+   sudo docker-compose -f docker-compose.synology.yml up -d
+   ```
+
+   Docker på DSM kræver root, deraf `sudo`. Har din DSM Container Manager
+   (7.2+) hedder kommandoen `docker compose` med mellemrum; den ældre
+   Docker-pakke har `docker-compose` med bindestreg.
 
 `data/` og `config/` er volumes, så ugerne, historikken og præferencerne
 overlever en opdatering. Kun koden skiftes ud.
