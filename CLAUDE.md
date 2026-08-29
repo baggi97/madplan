@@ -15,7 +15,17 @@ python -m app.main            # http://localhost:8099
 python -m app.main --nu       # henter forslag med det samme
 ```
 
-Docker: `docker compose up -d --build`
+Docker lokalt: `docker compose up -d --build` (bygger fra kildekoden).
+
+På NAS'en bruges `docker-compose.synology.yml` i stedet — den *henter* imaget
+fra GHCR frem for at bygge det. De to compose-filer er med vilje adskilt: den
+ene er til at udvikle i, den anden til at køre i drift.
+
+**Kræver Python 3.10 eller nyere.** Containeren bruger 3.12, men lokalt rammer
+man let systemets python — på macOS er den 3.9, og så dør opstarten. Årsagen er
+`dict | None` i signaturen på `web.start_forslag()`: `from __future__ import
+annotations` gør den til en streng, men FastAPI evaluerer den alligevel med
+`get_type_hints()`, og `|` mellem typer findes først i 3.10.
 
 ## Arkitektur
 
@@ -27,11 +37,56 @@ app/web.py      FastAPI: sider + JSON-endpoints
 app/store.py    filbaseret state, én JSON-fil pr. uge
 app/notify.py   valgfri Telegram-besked
 app/main.py     uvicorn + APScheduler i samme proces
+app/config.py   miljøvariabler + indlæsning af praeferencer.yaml
+
+config/praeferencer.yaml   husstandens smag — se nedenfor
 ```
 
 Der er ingen database. Al state er JSON i `data/`, skrevet atomisk via en
 `.tmp`-fil og `replace()`. Det er bevidst — datamængden er ganske lille, og en
 familie skal kunne kigge i filerne og rette i dem.
+
+### Præferencefilen
+
+`config/praeferencer.yaml` er det sted man tuner systemet — ikke prompterne i
+`ai.py`. Hele filen sendes med som JSON i **begge** AI-kald
+(`ai._praeferencetekst`), og `antal_personer` styrer portionsstørrelsen i kald
+2. Skal forslagene ændre karakter (mere vegetarisk, kortere hverdage, en vare
+familien ikke gider), er det her man retter — ikke i systemprompten.
+
+Filen er valgfri: mangler den, kører alt videre med "Ingen særlige præferencer
+angivet."
+
+`standard_portioner` er kun **startværdien** hvert forslag får. Det rigtige
+antal vælges pr. ret i websitet, så en uge kan tage højde for hvem der er
+hjemme. Feltet hed tidligere `antal_personer` og gjaldt hele ugen.
+
+**Kostregler** (`kostregler:`) styrer hvilke slags retter der må foreslås, og
+findes i to slags:
+
+- `profil:` — fri tekst (fx "proteinrige retter"). Sendes ordret til modellen
+  under overskriften "Krav til retterne". Rent kvalitativt; kan ikke måles.
+- `maks_<mærkat>` — talmæssige lofter. De sendes også til modellen, men
+  **håndhæves derudover i koden** af `ai._haandhaev_lofter()`. Det er
+  nødvendigt: modellen overholder ikke et "højst én" pålideligt.
+
+`ai._maerkater()` giver hver ret de mærkater den tæller med i. Der er tre
+kilder, og en ret kan bære flere — en dyr thairet er både `asiatisk` og `dyre`.
+Rammer den bare ét fyldt loft, ryger den:
+
+| Kilde | Mærkater | Kommer fra |
+|---|---|---|
+| kategori | `koed`, `fisk`, `vegetar` | skemaets enum |
+| køkken | `dansk`, `italiensk`, `asiatisk`, `mexicansk`, `mellemoestlig`, `andet` | skemaets enum |
+| pris | `dyre` | `pris_pr_portion` > `dyr_over_kr` |
+
+Håndhævelsen er generisk over `maks_*`, så `maks_mexicansk: 2` i YAML'en virker
+uden kodeændring. Rækkefølgen bevares, så det er de senere retter i en
+overfyldt gruppe der ryger. En ny **kategori eller et nyt køkken** kræver
+derimod både en linje i `ai.KATEGORIER`/`ai.KOEKKENER` og i skemaets `enum`.
+
+Bemærk at `dyre` hviler på modellens eget prisskøn i `pris_pr_portion`. Det er
+et skøn, ikke en beregning ud fra tilbudspriserne.
 
 ### Tilstandsmaskine
 
@@ -41,14 +96,64 @@ sidespor. Konstanterne ligger i `store.py`. Frontenden poller
 genindlæser når den skifter.
 
 `flow._laas` (asyncio.Lock) forhindrer at to samtidige klik starter det samme
-AI-kald to gange.
+AI-kald to gange — men mekanismen er ikke låsen alene. Låsen slippes *inden*
+AI-kaldet går i gang; det der faktisk værner, er at `status = ARBEJDER` skrives
+til disk inde i låsen, og at tjekket øverst i `hent_forslag()` og
+`lav_madplan()` læser den igen. Flytter man den skrivning uden for låsen,
+forsvinder beskyttelsen — også selvom låsen stadig står der.
+
+### Portioner og egne retter
+
+Hver ret bærer sit eget `portioner`-tal, både forslagene og familiens egne.
+`ai.lav_madplan()` skriver antallet ind pr. ret i prompten og beder om at
+mængderne skaleres derefter; indkøbslisten dækker summen. Verificeret
+2026-08-29 med 2, 6 og 3 personer på tre retter.
+
+Familiens egne ønsker ligger i `uge["egne"]` som
+`{navn, portioner, valgt}`. De er **bevidst holdt uden for** `forslag`:
+
+- `valgt` er indeks i `forslag`, og `hent_forslag()` skriver den liste om.
+  Egne retter overlever derfor at man henter nye forslag — de har deres eget
+  `valgt`-flag i stedet for at ligge i indeksrummet.
+- De har ingen `tilbuds_ids`. `ai.lav_madplan()` bruger derfor
+  `ret.get("tilbuds_ids") or []` og markerer dem som familiens eget ønske i
+  prompten, så modellen ikke leder efter tilbud der ikke findes.
+
+`web._antal_valgt()` tæller begge dele — brug den, ikke `len(uge["valgt"])`.
+
+### Udrulning
+
+`.github/workflows/deploy.yml` bygger og pusher `ghcr.io/<ejer>/madplan` ved
+hvert push til `main`, for `linux/amd64` og `linux/arm64` — NAS'er er begge
+dele afhængigt af model. Tags: `latest` og den korte commit-sha.
+
+På NAS'en kører en Watchtower med `--label-enable`, så **kun** containere med
+`com.centurylinklabs.watchtower.enable=true` opdateres. Det er bevidst: uden
+det flag ville den også opdatere alt andet på NAS'en.
+
+Tre ting må ikke havne i imaget, og `.dockerignore` holder dem ude:
+`.env` (nøglen), `data/` (ugerne) og `.git`. `data/` og `config/` er volumes,
+så state og præferencer overlever en opdatering.
+
+Dockerfilen har et `HEALTHCHECK` mod `/sundhedstjek`. Det bruger stdlib i
+stedet for `curl`, så imaget ikke skal vokse med en pakke mere.
 
 ## Verificerede fakta om datakilden
 
 `GET https://api.digital.rema1000.dk/api/v1/catalog/store/1/departments`
 
 Ingen nøgle, ingen auth. Returnerer ~9 MB JSON: 15 afdelinger → kategorier →
-varer. Testet 2026-08-29: 3.812 varer, hvoraf 212 med `is_on_discount`.
+varer. Målt 2026-08-29: 3.748 varer, hvoraf 212 med `is_on_discount`.
+
+Hele sien, samme måling — det er det sidste tal `MIN_TILBUD` vurderes imod:
+
+```
+3.748  varer i alt
+  212  is_on_discount
+  179  og reelt billigere (price < normal_price)
+  123  og i MAD_AFDELINGER
+  105  og ikke fanget af UDELUK   ← det er dem AI'en ser
+```
 
 Vigtige felter under `pricing`:
 
@@ -63,6 +168,11 @@ Vigtige felter under `pricing`:
 
 Varens `declaration` indeholder allergener i HTML. Vi strimler tags og
 beskærer til 200 tegn.
+
+`rema.UDELUK` sorterer varer fra som ligger i madafdelingerne, men ikke hører
+hjemme i en madplan: slik, sodavand, alkohol, dyrefoder, vaskepulver. Vær
+opmærksom på `\bis\b` — den fjerner is, men rammer også alt andet hvor "is"
+står som selvstændigt ord.
 
 **REMA's tilbud skifter om lørdagen**, så søndag morgen giver en frisk uge.
 
@@ -87,6 +197,30 @@ findes i input. `ai._valider_forslag()` kasserer retter med ukendte ID'er, og
 tilbage. Uden det trin foreslår modellen før eller siden kylling til en pris
 der ikke eksisterer. **Fjern ikke dette.**
 
+**Kun de 140 bedste tilbud når frem til modellen.** `rema.til_prompt_linjer()`
+beskærer til `maks=140`, og listen er sorteret efter rabatprocent, så det er de
+dårligste tilbud der ryger. Med de ~180 varer vi typisk ser, betyder det at en
+håndfuld aldrig kommer i prompten. Det forklarer hvorfor modellen kan "overse"
+en billig vare der står i `data/uge-*.json`.
+
+**Ingen SDK.** API'et kaldes råt over `httpx` — samme klient som REMA-kaldet,
+ingen ekstra afhængighed. Installér ikke `anthropic`-pakken for at gøre
+`ai._kald()` pænere. Standardmodellen er `claude-sonnet-5`, sat i `config.py`
+og overskrivelig med `ANTHROPIC_MODEL`. To kald om ugen koster i
+størrelsesordenen 30 kr. om året; `claude-opus-5` er ~2,5× det.
+
+**Fejl oversættes.** `ai._fejlbesked()` graver Anthropic's egen besked ud og
+oversætter de almindelige tilfælde (ugyldig nøgle, tom konto, hastighedsgrænse)
+til dansk. Brug ikke `raise_for_status()` her — den giver kun
+`Client error '401 Unauthorized' for url ...`, som ingen kan handle på.
+
+**Indkøbslisten luges bagefter.** `ai._fjern_basisvarer()` fjerner varer fra
+`har_altid_hjemme` som modellen alligevel skrev på listen. Prompten beder om
+det, men målt 2026-08-29 slap 3 ud af 19 varer igennem. Mønsteret matcher korte
+ord kun som hele ord (`mel` må ikke fange `melon`) og længere ord også som
+forstavelse (`pasta` fanger `pastaskruer`), med flertals-`er` trimmet af
+stammen. Samme mønster som kostreglerne: bed om det i prompten, ryd op bagefter.
+
 Historikken i `data/historik.json` sendes med i prompten som en undgå-liste
 plus optælling af hvad der ofte vælges og fravælges.
 
@@ -98,7 +232,9 @@ plus optælling af hvad der ofte vælges og fravælges.
 - **Ingen frontend-framework.** Server-renderet Jinja2 plus ~150 linjer vanilla
   JS. Ingen build-step. Hold det sådan.
 - **Optimistisk UI.** Klik opdaterer med det samme og rulles tilbage hvis
-  serveren afviser. Se `send()` i `app.js`.
+  serveren afviser. Se `send()` i `app.js`. Undtagelsen er at tilføje og
+  fjerne egne retter: de genindlæser siden, fordi en sletning omnummererer
+  de øvrige egne retter, og at rette indeks i klienten ville være en fejlkilde.
 - **Fejl skal være handlingsanvisende.** Ingen "noget gik galt" — sig hvad der
   skete og hvad man kan gøre.
 
@@ -122,6 +258,28 @@ stadig ordentligt ud.
   browserens nøgle ikke matchede serverens — fluebenene forsvandt ved
   genindlæsning. Nøglerne er nu rene indeks (`g0v1`).
 - **`is_advertised` er ikke det samme som på tilbud.** Se ovenfor.
+- **Ret-kortet er `<li class="ret-kort">`, ikke knappen.** Det var det
+  oprindeligt, men portionsvælgeren skal ligge i kortet, og en `<button>` inde
+  i en `<button>` er ugyldig HTML som browseren river fra hinanden. Kortets
+  udseende og `er-valgt` hænger derfor på `<li>`, mens `.ret` kun er den
+  klikbare del. `app.js` skifter klasse via `knap.closest(".ret-kort")`.
+- **Modellen dobbeltkoder af og til hele svaret som en JSON-streng.** Set i
+  praksis 2026-08-29: `input` var `{"retter": "{\"retter\": [...]}"}` i stedet
+  for et objekt. Uden `ai._udpak_retter()` løber valideringen hen over strengen
+  tegn for tegn, logger 250 advarsler og kasserer alt — og det oprindelige
+  symptom var en uforståelig `AttributeError`. Indholdet er gyldigt, så vi
+  pakker ud frem for at smide et betalt kald væk. Fjern ikke det trin.
+- **Livscyklussen hægtes på appen i `main.py`, ikke i `FastAPI()`-kaldet.**
+  Scheduleren hører til i `main.py`, men appen bliver født i `web.py`, så
+  `main()` sætter `app.router.lifespan_context` før `uvicorn.run`. Flyt det
+  ikke til `web.py` for at gøre det "rigtigt" — så blander web-laget sig med
+  planlægningen. Al opstart går gennem `python -m app.main`, også i Docker.
+- **`vaelg` og `kryds` er læs-ret-skriv uden lås.** Begge endpoints læser hele
+  uge-dicten, retter ét felt og skriver alt tilbage. Klikker to familiemedlemmer
+  samtidig fra hver sin telefon, kan den ene skrivning overskrive den anden.
+  Vinduet er millisekunder, så vi har ikke set det i praksis — men det er
+  præcis det scenarie appen er bygget til, så udvid ikke mønstret til flere
+  endpoints uden at tage en lås med.
 
 ## Test
 

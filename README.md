@@ -12,7 +12,7 @@ Ingen Home Assistant, ingen apps. Bare et website på din NAS.
 | Tidspunkt | Hvad der sker |
 |---|---|
 | Søndag 08:00 | Henter tilbud og laver 10 forslag |
-| Løbende | Familien åbner websitet og trykker på de retter de vil have |
+| Løbende | Familien åbner websitet, trykker på de retter de vil have, sætter antal personer pr. ret og kan skrive egne ønsker ind |
 | Når nogen trykker **Lav madplanen** | Opskrifter og indkøbsliste bliver skrevet |
 | Søndag 18:00 | Har ingen trykket, tages de fem første forslag automatisk |
 
@@ -49,8 +49,12 @@ Alt i `.env` bortset fra API-nøglen er valgfrit.
 | `TELEGRAM_TOKEN` | tom | Valgfri notifikation. Tom = slået fra |
 
 `config/praeferencer.yaml` er det vigtigste at rette. Det er her forslagene går
-fra generiske til jeres: antal personer, allergier, hvad I ikke gider, hvor
-lang tid I har på en hverdag, og hvad I altid har hjemme.
+fra generiske til jeres: allergier, hvad I ikke gider, hvor lang tid I har på
+en hverdag, hvad I altid har hjemme, og `kostregler` med lofter som "højst én
+fiskeret".
+
+Antal personer sættes pr. ret i websitet — `standard_portioner` i YAML'en er
+kun startværdien. Så kan en uge tage højde for hvem der er hjemme.
 
 ### Telegram (valgfrit)
 
@@ -100,6 +104,41 @@ at der kommer mindst `MIN_TILBUD` varer retur; er der færre, vises en fejl på
 forsiden i stedet for at bede Claude om at digte en madplan.
 
 REMA's tilbud skifter om lørdagen, så søndag morgen giver en frisk uge.
+
+## Deploy på NAS'en
+
+Imaget bygges af GitHub Actions ved hvert push til `main` og lægges på GHCR som
+`ghcr.io/<ejer>/madplan:latest` — både `linux/amd64` og `linux/arm64`. På
+NAS'en kører en Watchtower, der kigger efter et nyt image hvert 5. minut og
+genstarter containeren når der er et. Du pusher, og et par minutter senere
+kører NAS'en den nye version.
+
+**Første gang:**
+
+1. Opret repoet på GitHub og push `main`. Actionen kører af sig selv.
+2. Gør pakken læsbar for NAS'en. Er repoet privat, er imaget også privat, og
+   så skal NAS'en logge ind. Nemmest: GitHub → repoets **Packages** →
+   `madplan` → **Package settings** → **Change visibility** → *Public*.
+   Vil du hellere holde det privat, så kør `docker login ghcr.io` på NAS'en
+   med et personal access token der har `read:packages`.
+3. På NAS'en, læg tingene i `/docker/madplan`:
+
+   ```
+   /docker/madplan/.env                       # ANTHROPIC_API_KEY=sk-ant-...
+   /docker/madplan/config/praeferencer.yaml   # husstandens smag
+   /docker/madplan/data/                      # ugerne, oprettes af sig selv
+   ```
+
+4. Synology Container Manager → **Project** → peg på
+   `docker-compose.synology.yml`. Stierne i filen er absolutte, så projektet
+   kan ligge hvor som helst.
+
+`data/` og `config/` er volumes, så ugerne, historikken og præferencerne
+overlever en opdatering. Kun koden skiftes ud.
+
+**Vil du ikke have automatisk opdatering?** Slet `watchtower`-servicen fra
+compose-filen. Så henter du selv nye versioner med `docker compose pull &&
+docker compose up -d`.
 
 ## Drift
 

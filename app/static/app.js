@@ -24,25 +24,116 @@ function varsel(tekst) {
   setTimeout(() => boks.remove(), 3200);
 }
 
+function opdaterTaeller(antal) {
+  const taeller = document.querySelector("[data-taeller]");
+  if (!taeller) return;
+  taeller.textContent = antal;
+  const knap = document.querySelector('[data-handling="lav-madplan"]');
+  if (knap) knap.disabled = antal === 0;
+}
+
 /* --- Vælg retter --------------------------------------------------- */
 
-document.querySelectorAll(".ret").forEach((kort) => {
-  kort.addEventListener("click", async () => {
+/* Kortet er <li class="ret-kort">; knappen er kun den klikbare del, fordi
+   portionsvælgeren ikke må ligge inde i en <button>. */
+function bindVaelg(knap, sti, krop) {
+  knap.addEventListener("click", async () => {
+    const kort = knap.closest(".ret-kort");
     const var_valgt = kort.classList.contains("er-valgt");
     kort.classList.toggle("er-valgt");
-    kort.setAttribute("aria-pressed", String(!var_valgt));
+    knap.setAttribute("aria-pressed", String(!var_valgt));
 
     try {
-      const data = await send(`/api/uge/${UGE}/vaelg`, { idx: Number(kort.dataset.idx) });
-      const taeller = document.querySelector("[data-taeller]");
-      if (taeller) {
-        taeller.textContent = data.antal;
-        const knap = document.querySelector('[data-handling="lav-madplan"]');
-        if (knap) knap.disabled = data.antal === 0;
-      }
+      opdaterTaeller((await send(sti, krop())).antal);
     } catch (e) {
       kort.classList.toggle("er-valgt");
-      kort.setAttribute("aria-pressed", String(var_valgt));
+      knap.setAttribute("aria-pressed", String(var_valgt));
+      varsel(e.message);
+    }
+  });
+}
+
+document.querySelectorAll(".ret[data-idx]").forEach((knap) =>
+  bindVaelg(knap, `/api/uge/${UGE}/vaelg`, () => ({ idx: Number(knap.dataset.idx) }))
+);
+
+document.querySelectorAll(".ret[data-egen-idx]").forEach((knap) =>
+  bindVaelg(knap, `/api/uge/${UGE}/egen/vaelg`, () => ({
+    idx: Number(knap.dataset.egenIdx),
+  }))
+);
+
+/* --- Antal personer pr. ret ---------------------------------------- */
+
+const MIN_PORTIONER = 1;
+const MAKS_PORTIONER = 12;
+
+function opdaterTalKnapper(raekke) {
+  const n = Number(raekke.querySelector("[data-portioner-tal]").textContent);
+  raekke.querySelector('[data-portioner="ned"]').disabled = n <= MIN_PORTIONER;
+  raekke.querySelector('[data-portioner="op"]').disabled = n >= MAKS_PORTIONER;
+}
+
+document.querySelectorAll(".portioner").forEach(opdaterTalKnapper);
+
+document.querySelectorAll("[data-portioner]").forEach((knap) => {
+  knap.addEventListener("click", async () => {
+    const raekke = knap.closest(".portioner");
+    const felt = raekke.querySelector("[data-portioner-tal]");
+    const foer = Number(felt.textContent);
+    const efter = knap.dataset.portioner === "op" ? foer + 1 : foer - 1;
+    if (efter < MIN_PORTIONER || efter > MAKS_PORTIONER) return;
+
+    felt.textContent = efter;
+    opdaterTalKnapper(raekke);
+
+    try {
+      await send(`/api/uge/${UGE}/portioner`, {
+        slags: knap.dataset.slags,
+        idx: Number(knap.dataset.idx),
+        portioner: efter,
+      });
+    } catch (e) {
+      felt.textContent = foer;
+      opdaterTalKnapper(raekke);
+      varsel(e.message);
+    }
+  });
+});
+
+/* --- Familiens egne retter ------------------------------------------ */
+
+/* Tilføj og fjern genindlæser: en sletning omnummererer de øvrige egne
+   retter, og at rette indeks i klienten ville være en fejlkilde. */
+const egenForm = document.querySelector("[data-egen-form]");
+if (egenForm) {
+  egenForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const felt = egenForm.querySelector(".egen-felt");
+    const navn = felt.value.trim();
+    if (!navn) return;
+
+    const knap = egenForm.querySelector("button");
+    knap.disabled = true;
+    try {
+      await send(`/api/uge/${UGE}/egen`, { navn });
+      location.reload();
+    } catch (err) {
+      knap.disabled = false;
+      varsel(err.message);
+      felt.focus();
+    }
+  });
+}
+
+document.querySelectorAll("[data-slet-egen]").forEach((knap) => {
+  knap.addEventListener("click", async () => {
+    knap.disabled = true;
+    try {
+      await send(`/api/uge/${UGE}/egen/slet`, { idx: Number(knap.dataset.sletEgen) });
+      location.reload();
+    } catch (e) {
+      knap.disabled = false;
       varsel(e.message);
     }
   });

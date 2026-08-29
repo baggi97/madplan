@@ -65,6 +65,7 @@ def tom_uge(noegle: str) -> dict:
         "tilbud": [],
         "forslag": [],
         "valgt": [],        # indeks i forslag-listen
+        "egne": [],         # familiens egne retter: {navn, portioner, valgt}
         "madplan": {},      # opskrifter + indkoebsliste
         "afkrydset": {},    # vare-nøgle -> True
     }
@@ -97,13 +98,21 @@ def hent_historik() -> list[dict]:
     return _laes("historik.json", [])
 
 
-def tilfoej_historik(noegle: str, forslag: list[dict], valgte_idx: list[int]) -> None:
+def tilfoej_historik(
+    noegle: str,
+    forslag: list[dict],
+    valgte_idx: list[int],
+    egne: list[dict] | None = None,
+) -> None:
+    # Egne retter tæller som valgt — de er jo aktivt tilføjet af familien.
+    egne_navne = [e["navn"] for e in (egne or []) if e.get("valgt")]
     hist = [h for h in hent_historik() if h["uge"] != noegle]
     hist.append(
         {
             "uge": noegle,
             "dato": nu().date().isoformat(),
-            "valgt": [f["navn"] for i, f in enumerate(forslag) if i in valgte_idx],
+            "valgt": [f["navn"] for i, f in enumerate(forslag) if i in valgte_idx]
+            + egne_navne,
             "fravalgt": [f["navn"] for i, f in enumerate(forslag) if i not in valgte_idx],
         }
     )

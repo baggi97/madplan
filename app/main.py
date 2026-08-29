@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+from contextlib import asynccontextmanager
 
 import uvicorn
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -25,8 +26,9 @@ def _cron(spec: str) -> CronTrigger:
     return CronTrigger(day_of_week=ugedag, hour=int(time), minute=0, timezone=config.TZ)
 
 
-@app.on_event("startup")
-async def start_scheduler() -> None:
+@asynccontextmanager
+async def livscyklus(_app):
+    """Starter scheduleren når serveren er oppe, og lukker den ned igen."""
     scheduler = AsyncIOScheduler(timezone=config.TZ)
     scheduler.add_job(flow.hent_forslag, _cron(config.FORSLAG_CRON), id="forslag")
     scheduler.add_job(flow.deadline, _cron(config.DEADLINE_CRON), id="deadline")
@@ -38,6 +40,12 @@ async def start_scheduler() -> None:
         log.info("--nu: henter forslag med det samme")
         asyncio.create_task(flow.hent_forslag(gennemtving=True))
 
+    try:
+        yield
+    finally:
+        # wait=False: et igangværende AI-kald skal ikke holde nedlukningen
+        scheduler.shutdown(wait=False)
+
 
 def main() -> None:
     mangler = config.valider()
@@ -47,6 +55,10 @@ def main() -> None:
 
     if not config.notifikationer_slaaet_til():
         log.info("Telegram er ikke sat op — kører kun med websitet")
+
+    # Scheduleren hører hjemme her, ikke i web.py, så livscyklussen hægtes på
+    # appen nu — før uvicorn.run, altså før nogen ASGI-hændelse er sket.
+    app.router.lifespan_context = livscyklus
 
     log.info("Åbn http://localhost:%d", config.WEB_PORT)
     uvicorn.run(app, host="0.0.0.0", port=config.WEB_PORT, log_level="warning")

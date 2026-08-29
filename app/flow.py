@@ -53,6 +53,11 @@ async def hent_forslag(gennemtving: bool = False) -> None:
     if not forslag:
         return _fejl(noegle, "Ingen brugbare forslag kom retur. Prøv igen.")
 
+    # Hver ret starter på husstandens standard og justeres derefter pr. ret
+    standard = config.hent_praeferencer().get("standard_portioner", 4)
+    for ret in forslag:
+        ret["portioner"] = standard
+
     uge = store.hent_uge(noegle)
     uge.update(
         {
@@ -64,6 +69,8 @@ async def hent_forslag(gennemtving: bool = False) -> None:
             "status": store.VAELGER,
         }
     )
+    # uge["egne"] bevidst urørt: familiens egne retter skal overleve at man
+    # henter nye forslag.
     store.gem_uge(uge)
     log.info("Klar med %d forslag for %s", len(forslag), noegle)
 
@@ -82,8 +89,9 @@ async def lav_madplan(noegle: str | None = None) -> None:
         if not uge["forslag"]:
             return _fejl(noegle, "Der er ingen forslag at lave en madplan ud fra.")
 
+        egne = [e for e in (uge.get("egne") or []) if e.get("valgt")]
         valgte_idx = sorted(uge.get("valgt") or [])
-        if not valgte_idx:
+        if not valgte_idx and not egne:
             # Ingen har valgt — tag de første frem for at droppe ugen.
             valgte_idx = list(range(min(config.ANTAL_RETTER, len(uge["forslag"]))))
 
@@ -92,7 +100,9 @@ async def lav_madplan(noegle: str | None = None) -> None:
         uge["fejlbesked"] = ""
         store.gem_uge(uge)
 
-    valgte = [uge["forslag"][i] for i in valgte_idx]
+    valgte = [uge["forslag"][i] for i in valgte_idx] + [
+        {**e, "egen": True} for e in egne
+    ]
 
     try:
         madplan = await ai.lav_madplan(valgte, uge["tilbud"], config.hent_praeferencer())
@@ -104,7 +114,7 @@ async def lav_madplan(noegle: str | None = None) -> None:
     uge["afkrydset"] = {}
     uge["status"] = store.KLAR
     store.gem_uge(uge)
-    store.tilfoej_historik(noegle, uge["forslag"], valgte_idx)
+    store.tilfoej_historik(noegle, uge["forslag"], valgte_idx, uge.get("egne"))
 
     antal = sum(len(g.get("varer", [])) for g in madplan.get("indkoebsliste", []))
     log.info("Madplan klar for %s: %d retter, %d varer", noegle, len(valgte), antal)

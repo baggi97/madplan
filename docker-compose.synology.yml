@@ -1,0 +1,39 @@
+# Synology Container Manager → Project. Kører Madplan og opdaterer sig selv
+# når GitHub-actionen har lagt et nyt :latest-image på GHCR.
+#
+# Websitet efter deploy:  http://<NAS-IP>:8099
+#
+# Alt bor i /docker/madplan på NAS'en:
+#   /docker/madplan/.env                      ANTHROPIC_API_KEY=sk-ant-...
+#   /docker/madplan/config/praeferencer.yaml  husstandens smag
+#   /docker/madplan/data/                     ugerne og historikken
+services:
+  madplan:
+    image: ghcr.io/baggi97/madplan:latest
+    container_name: madplan
+    restart: unless-stopped
+    env_file: /docker/madplan/.env
+    environment:
+      DATA_DIR: /data
+      CONFIG_DIR: /config
+    ports:
+      - "8099:8099"
+    volumes:
+      # Ugerne og historikken skal overleve en opdatering
+      - /docker/madplan/data:/data
+      # Præferencerne redigeres på NAS'en, ikke i imaget
+      - /docker/madplan/config:/config
+    labels:
+      # Kun denne container opdateres automatisk — dine andre NAS-containere
+      # bliver ikke rørt.
+      - com.centurylinklabs.watchtower.enable=true
+
+  # Kigger på GHCR hvert 5. minut og genstarter mærkede containere når
+  # imaget har ændret sig.
+  watchtower:
+    image: containrrr/watchtower
+    container_name: madplan-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 300 --cleanup --label-enable

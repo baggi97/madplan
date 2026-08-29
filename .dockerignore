@@ -1,0 +1,13 @@
+.git
+.github
+.venv
+venv
+__pycache__
+*.py[cod]
+
+# Hemmeligheder og kørselsdata hører ikke i et image
+.env
+data
+
+# Dokumentation
+*.md

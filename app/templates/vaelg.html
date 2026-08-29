@@ -26,8 +26,8 @@
 
 <ul class="retter" {% if arbejder %}hidden{% endif %}>
   {% for ret in uge.forslag %}
-  <li>
-    <button class="ret {% if ret.valgt %}er-valgt{% endif %}"
+  <li class="ret-kort {% if ret.valgt %}er-valgt{% endif %}">
+    <button class="ret"
             data-idx="{{ ret.idx }}"
             aria-pressed="{{ 'true' if ret.valgt else 'false' }}">
       <span class="ret-tjek" aria-hidden="true"></span>
@@ -58,9 +58,60 @@
         <span class="skilt-enhed">kr/pers</span>
       </span>
     </button>
+
+    <div class="portioner">
+      <span class="portioner-tekst">Til</span>
+      <div class="tal-vaelger">
+        <button class="tal-knap" data-portioner="ned" data-slags="forslag" data-idx="{{ ret.idx }}"
+                aria-label="Færre personer til {{ ret.navn }}">&minus;</button>
+        <span class="tal" data-portioner-tal>{{ ret.portioner or 4 }}</span>
+        <button class="tal-knap" data-portioner="op" data-slags="forslag" data-idx="{{ ret.idx }}"
+                aria-label="Flere personer til {{ ret.navn }}">+</button>
+      </div>
+      <span class="portioner-tekst">personer</span>
+    </div>
   </li>
   {% endfor %}
 </ul>
+
+<section class="egne" {% if arbejder %}hidden{% endif %}>
+  <h2 class="egne-titel">Jeres egne retter</h2>
+  <p class="egne-under">Har I selv en idé, så skriv den her. Den kommer med i madplanen på lige fod med forslagene.</p>
+
+  <ul class="retter egne-liste" {% if not uge.egne %}hidden{% endif %}>
+    {% for e in uge.egne %}
+    <li class="ret-kort {% if e.valgt %}er-valgt{% endif %}" data-egen="{{ e.idx }}">
+      <button class="ret ret-egen" data-egen-idx="{{ e.idx }}"
+              aria-pressed="{{ 'true' if e.valgt else 'false' }}">
+        <span class="ret-tjek" aria-hidden="true"></span>
+        <span class="ret-krop">
+          <span class="ret-navn">{{ e.navn }}</span>
+          <span class="ret-beskrivelse">Jeres eget ønske</span>
+        </span>
+      </button>
+
+      <div class="portioner">
+        <span class="portioner-tekst">Til</span>
+        <div class="tal-vaelger">
+          <button class="tal-knap" data-portioner="ned" data-slags="egen" data-idx="{{ e.idx }}"
+                  aria-label="Færre personer til {{ e.navn }}">&minus;</button>
+          <span class="tal" data-portioner-tal>{{ e.portioner }}</span>
+          <button class="tal-knap" data-portioner="op" data-slags="egen" data-idx="{{ e.idx }}"
+                  aria-label="Flere personer til {{ e.navn }}">+</button>
+        </div>
+        <span class="portioner-tekst">personer</span>
+        <button class="slet-knap" data-slet-egen="{{ e.idx }}" aria-label="Fjern {{ e.navn }}">Fjern</button>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+
+  <form class="egen-form" data-egen-form>
+    <input class="egen-felt" name="navn" type="text" maxlength="80" required
+           placeholder="Fx Spaghetti carbonara" aria-label="Navn på jeres egen ret">
+    <button class="knap knap-sekundaer" type="submit">Tilføj</button>
+  </form>
+</section>
 {% elif uge.status != 'fejl' and not arbejder %}
 <div class="besked">
   <h2>Ingen forslag endnu</h2>

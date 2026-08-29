@@ -111,6 +111,24 @@ li { list-style: none; }
 
 .retter { display: flex; flex-direction: column; gap: 12px; }
 
+/* Kortet er nu <li>, ikke knappen — portionsvælgeren må ikke ligge
+   inde i en <button>. */
+.ret-kort {
+  background: var(--kort);
+  border: 1.5px solid var(--linje);
+  border-radius: var(--radius);
+  box-shadow: var(--skygge);
+  overflow: hidden;
+  transition: border-color .14s ease, box-shadow .14s ease;
+}
+
+.ret-kort:hover { border-color: var(--blaek-mild); }
+
+.ret-kort.er-valgt {
+  border-color: var(--blaek);
+  box-shadow: 0 0 0 1.5px var(--blaek), var(--skygge);
+}
+
 .ret {
   width: 100%;
   display: grid;
@@ -118,28 +136,105 @@ li { list-style: none; }
   gap: 14px;
   align-items: start;
   text-align: left;
-  background: var(--kort);
-  border: 1.5px solid var(--linje);
+  background: none;
+  border: 0;
   border-radius: var(--radius);
   padding: 16px;
   font: inherit;
   color: inherit;
   cursor: pointer;
-  box-shadow: var(--skygge);
-  transition: border-color .14s ease, box-shadow .14s ease;
 }
 
-.ret:hover { border-color: var(--blaek-mild); }
+.ret-egen { grid-template-columns: 26px 1fr; }
 
 .ret:focus-visible {
   outline: 3px solid var(--gul);
-  outline-offset: 2px;
+  outline-offset: -3px;
 }
 
-.ret.er-valgt {
-  border-color: var(--blaek);
-  box-shadow: 0 0 0 1.5px var(--blaek), var(--skygge);
+/* --- portioner pr. ret --- */
+
+.portioner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--linje);
+  background: #fbfcfd;
+  font-size: .88rem;
+  color: var(--blaek-mild);
 }
+
+.tal-vaelger { display: flex; align-items: center; gap: 3px; }
+
+.tal-knap {
+  width: 30px;
+  height: 30px;
+  border: 1.5px solid var(--linje);
+  border-radius: 8px;
+  background: var(--kort);
+  font: 600 1.05rem/1 inherit;
+  color: var(--blaek);
+  cursor: pointer;
+}
+
+.tal-knap:hover:not(:disabled) { border-color: var(--blaek-mild); }
+.tal-knap:disabled { opacity: .3; cursor: not-allowed; }
+.tal-knap:focus-visible { outline: 3px solid var(--gul); outline-offset: 2px; }
+
+.tal {
+  min-width: 28px;
+  text-align: center;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--blaek);
+}
+
+.slet-knap {
+  margin-left: auto;
+  background: none;
+  border: 0;
+  padding: 4px;
+  color: var(--graa);
+  font: inherit;
+  font-size: .84rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.slet-knap:hover { color: var(--roed); }
+.slet-knap:focus-visible { outline: 3px solid var(--gul); outline-offset: 2px; }
+
+/* --- familiens egne retter --- */
+
+.egne { margin-top: 32px; }
+.egne-titel { font-size: 1.12rem; margin-bottom: 4px; }
+.egne-under { color: var(--blaek-mild); font-size: .9rem; margin-bottom: 14px; }
+.egne-liste { margin-bottom: 12px; }
+
+.egen-form { display: flex; gap: 8px; }
+
+.egen-felt {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1.5px solid var(--linje);
+  border-radius: var(--radius);
+  background: var(--kort);
+  font: inherit;
+  color: inherit;
+}
+
+.egen-felt::placeholder { color: var(--graa); }
+
+.egen-felt:focus-visible {
+  outline: 3px solid var(--gul);
+  outline-offset: 2px;
+  border-color: var(--blaek-mild);
+}
+
+.egen-form .knap { flex: none; border: 1.5px solid var(--blaek); }
 
 .ret-tjek {
   width: 24px;
@@ -153,7 +248,7 @@ li { list-style: none; }
   transition: background .14s ease, border-color .14s ease;
 }
 
-.ret.er-valgt .ret-tjek { background: var(--blaek); border-color: var(--blaek); }
+.ret-kort.er-valgt .ret-tjek { background: var(--blaek); border-color: var(--blaek); }
 
 .ret-tjek::after {
   content: "";
@@ -168,7 +263,7 @@ li { list-style: none; }
   transition: transform .16s cubic-bezier(.2, .9, .3, 1.3);
 }
 
-.ret.er-valgt .ret-tjek::after { transform: rotate(42deg) scale(1); }
+.ret-kort.er-valgt .ret-tjek::after { transform: rotate(42deg) scale(1); }
 
 .ret-krop { min-width: 0; }
 

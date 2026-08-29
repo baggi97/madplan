@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 
 import httpx
 
@@ -46,8 +47,31 @@ VAERKTOEJ_FORSLAG = {
                             "items": {"type": "string"},
                             "description": "ID'er fra tilbudslisten som retten bygger på. Kun ID'er der findes i listen.",
                         },
+                        "kategori": {
+                            "type": "string",
+                            "enum": ["koed", "fisk", "vegetar"],
+                            "description": (
+                                "'fisk' hvis retten indeholder fisk eller skaldyr. "
+                                "'vegetar' hvis den er helt uden kød og fisk. "
+                                "Ellers 'koed'."
+                            ),
+                        },
+                        "koekken": {
+                            "type": "string",
+                            "enum": [
+                                "dansk", "italiensk", "asiatisk", "mexicansk",
+                                "mellemoestlig", "andet",
+                            ],
+                            "description": (
+                                "Rettens køkken. 'asiatisk' dækker bl.a. thai, "
+                                "kinesisk, japansk, indisk og vietnamesisk."
+                            ),
+                        },
                     },
-                    "required": ["navn", "beskrivelse", "tid_min", "pris_pr_portion", "tilbuds_ids"],
+                    "required": [
+                        "navn", "beskrivelse", "tid_min", "pris_pr_portion",
+                        "tilbuds_ids", "kategori", "koekken",
+                    ],
                 },
             }
         },
@@ -124,21 +148,167 @@ async def _kald(system: str, besked: str, vaerktoej: dict, maks_tokens: int) -> 
         "tools": [vaerktoej],
         "tool_choice": {"type": "tool", "name": vaerktoej["name"]},
     }
-    async with httpx.AsyncClient(timeout=180) as client:
-        r = await client.post(
-            config.ANTHROPIC_URL,
-            headers={**HEADERS, "x-api-key": config.ANTHROPIC_API_KEY},
-            json=krop,
-        )
-        if r.status_code >= 400:
-            log.error("Anthropic-fejl %s: %s", r.status_code, r.text[:500])
-        r.raise_for_status()
-        svar = r.json()
+    try:
+        async with httpx.AsyncClient(timeout=180) as client:
+            r = await client.post(
+                config.ANTHROPIC_URL,
+                headers={**HEADERS, "x-api-key": config.ANTHROPIC_API_KEY},
+                json=krop,
+            )
+    except httpx.TimeoutException:
+        raise RuntimeError(
+            "Anthropic svarede ikke inden for tre minutter. Prøv igen."
+        ) from None
 
-    for blok in svar.get("content", []):
+    if r.status_code >= 400:
+        raise RuntimeError(_fejlbesked(r))
+
+    for blok in r.json().get("content", []):
         if blok.get("type") == "tool_use":
             return blok["input"]
     raise RuntimeError("Modellen returnerede ikke det forventede værktøjskald")
+
+
+def _fejlbesked(r: httpx.Response) -> str:
+    """Anthropic's egen besked, så familien ser noget de kan handle på.
+
+    `raise_for_status()` giver kun "Client error '401 Unauthorized' for url
+    ...", hvilket ikke fortæller nogen hvad de skal gøre.
+    """
+    log.error("Anthropic-fejl %s: %s", r.status_code, r.text[:500])
+    try:
+        fejl = (r.json() or {}).get("error") or {}
+        art, besked = fejl.get("type", ""), fejl.get("message", "")
+    except Exception:
+        art, besked = "", ""
+
+    if r.status_code == 401 or art == "authentication_error":
+        return "Anthropic afviste API-nøglen. Tjek ANTHROPIC_API_KEY i .env."
+    if r.status_code == 400 and art == "invalid_request_error":
+        return "Anthropic afviste forespørgslen: {}".format(besked)
+    if r.status_code == 429:
+        return "Anthropic's hastighedsgrænse er nået. Prøv igen om lidt."
+    if art == "billing_error" or "credit" in besked.lower():
+        return "Der er ikke flere credits på Anthropic-kontoen."
+    if r.status_code >= 500:
+        return "Anthropic har problemer lige nu ({}). Prøv igen senere.".format(
+            r.status_code
+        )
+    return besked or "Anthropic svarede {}".format(r.status_code)
+
+
+KATEGORIER = ("koed", "fisk", "vegetar")
+KOEKKENER = ("dansk", "italiensk", "asiatisk", "mexicansk", "mellemoestlig", "andet")
+
+
+def _heltal(x) -> bool:
+    return isinstance(x, int) and not isinstance(x, bool)
+
+
+def _maerkater(ret: dict, regler: dict) -> list[str]:
+    """Alle lofter denne ret tæller med i.
+
+    En ret kan bære flere mærkater — en dyr thairet er både 'asiatisk' og
+    'dyre'. Rammer den bare ét fyldt loft, ryger den.
+    """
+    m = []
+    if ret.get("kategori") in KATEGORIER:
+        m.append(ret["kategori"])
+    if ret.get("koekken") in KOEKKENER:
+        m.append(ret["koekken"])
+    graense = regler.get("dyr_over_kr")
+    if isinstance(graense, (int, float)) and not isinstance(graense, bool):
+        try:
+            if float(ret.get("pris_pr_portion") or 0) > float(graense):
+                m.append("dyre")
+        except (TypeError, ValueError):
+            pass
+    return m
+
+
+def _udpak_retter(svar: dict) -> list:
+    """Henter rettelisten ud af modellens svar.
+
+    Modellen har i praksis pakket hele svaret som én JSON-streng i stedet for
+    et objekt. Indholdet er gyldigt — det er kun kodet én gang for meget — så
+    vi pakker ud i stedet for at smide et betalt kald væk. Uden det her løber
+    valideringen hen over strengen tegn for tegn og kasserer 250 "retter".
+    """
+    retter = svar.get("retter") if isinstance(svar, dict) else None
+
+    if isinstance(retter, str):
+        try:
+            indre = json.loads(retter)
+        except json.JSONDecodeError:
+            log.warning("'retter' kom som en streng der ikke er JSON — kasseres")
+            return []
+        retter = indre.get("retter") if isinstance(indre, dict) else indre
+        log.warning("Modellen dobbeltkodede svaret som JSON-streng — pakket ud igen")
+
+    if not isinstance(retter, list):
+        log.warning("Forventede en liste af retter, fik %s", type(retter).__name__)
+        return []
+    return retter
+
+
+def _regeltekst(regler: dict) -> str:
+    """Bygger kravlisten til prompten ud fra kostreglerne i praeferencer.yaml.
+
+    Går generisk gennem alle `maks_*`, så en ny regel i YAML'en virker uden
+    kodeændring.
+    """
+    linjer = ["- {}".format(x) for x in (regler.get("profil") or [])]
+    for noegle in sorted(regler):
+        if not noegle.startswith("maks_") or not _heltal(regler[noegle]):
+            continue
+        loft, maerkat = regler[noegle], noegle[len("maks_"):]
+        ret_ord = "ret" if loft == 1 else "retter"
+        if maerkat == "dyre":
+            linjer.append(
+                "- Højst {} {} der koster over {:.0f} kr. pr. portion.".format(
+                    loft, ret_ord, float(regler.get("dyr_over_kr") or 0)
+                )
+            )
+        else:
+            linjer.append(
+                "- Højst {} {} af typen '{}'.".format(loft, ret_ord, maerkat)
+            )
+    if not linjer:
+        return ""
+    return "Krav til retterne:\n" + "\n".join(linjer) + "\n\n"
+
+
+def _haandhaev_lofter(retter: list[dict], regler: dict) -> list[dict]:
+    """Trimmer forslag der overskrider et loft.
+
+    Modellen får kravene i prompten, men overholder dem ikke pålideligt —
+    derfor tælles der efter her. Rækkefølgen bevares, så det er de senere
+    retter i en overfyldt kategori der ryger.
+    """
+    if not regler:
+        return retter
+    talt: dict[str, int] = {}
+    ok = []
+    for ret in retter:
+        maerkater = _maerkater(ret, regler)
+        fyldt = next(
+            (
+                m for m in maerkater
+                if _heltal(regler.get("maks_" + m))
+                and talt.get(m, 0) >= regler["maks_" + m]
+            ),
+            None,
+        )
+        if fyldt:
+            log.warning(
+                "Kasserer '%s' — loftet på %d '%s' er nået",
+                ret.get("navn"), regler["maks_" + fyldt], fyldt,
+            )
+            continue
+        for m in maerkater:
+            talt[m] = talt.get(m, 0) + 1
+        ok.append(ret)
+    return ok
 
 
 def _praeferencetekst(praef: dict) -> str:
@@ -151,6 +321,7 @@ async def foreslaa_retter(tilbud: list[dict], praef: dict) -> list[dict]:
     gyldige = {t["id"] for t in tilbud}
     undgaa = store.seneste_retter(6)
     signal = store.praeferencesignal()
+    regler = praef.get("kostregler") or {}
 
     system = (
         "Du planlægger ugens aftensmad for en dansk husstand ud fra REMA 1000's "
@@ -164,11 +335,18 @@ async def foreslaa_retter(tilbud: list[dict], praef: dict) -> list[dict]:
         "3. Variation: forskellige proteinkilder og køkkener på tværs af de 10 "
         "forslag. Ikke fem retter med hakket oksekød.\n"
         "4. Mindst halvdelen skal kunne laves på 30 minutter eller mindre.\n"
-        "5. Foreslå ikke noget der ligner retterne på 'undgå'-listen."
+        "5. Foreslå ikke noget der ligner retterne på 'undgå'-listen.\n"
+        "6. Overhold alt under 'Krav til retterne'. Sæt `kategori` og "
+        "`koekken` ærligt — det er dem kravene tælles på.\n"
+        "7. Byg ikke retter på noget fra 'allergier' eller 'kan_vi_ikke_lide'. "
+        "Nævn det heller ikke: ingen navne eller beskrivelser som "
+        "'postejfri', 'uden nødder' eller 'undgået denne uge'. Find på noget "
+        "andet, og lad som om varen ikke findes."
     )
 
     besked = (
         f"Ugens tilbud i REMA 1000:\n{rema.til_prompt_linjer(tilbud)}\n\n"
+        f"{_regeltekst(regler)}"
         f"Husstandens præferencer:\n{_praeferencetekst(praef)}\n\n"
         f"Serveret de sidste 6 uger (undgå disse):\n"
         f"{', '.join(undgaa) if undgaa else 'ingen historik endnu'}\n\n"
@@ -178,28 +356,64 @@ async def foreslaa_retter(tilbud: list[dict], praef: dict) -> list[dict]:
     )
 
     svar = await _kald(system, besked, VAERKTOEJ_FORSLAG, 4000)
-    retter = _valider_forslag(svar.get("retter", []), gyldige)
+    retter = _haandhaev_lofter(_valider_forslag(_udpak_retter(svar), gyldige), regler)
 
     # Fik vi for få gyldige retter, beder vi om erstatninger én gang.
     if len(retter) < config.ANTAL_FORSLAG:
         mangler = config.ANTAL_FORSLAG - len(retter)
         log.warning("Kun %d gyldige forslag, beder om %d mere", len(retter), mangler)
+        brugt: dict[str, int] = {}
+        for r in retter:
+            for m in _maerkater(r, regler):
+                brugt[m] = brugt.get(m, 0) + 1
+        fyldte = [
+            n[len("maks_"):] for n in sorted(regler)
+            if n.startswith("maks_") and _heltal(regler[n])
+            and brugt.get(n[len("maks_"):], 0) >= regler[n]
+        ]
         ekstra_besked = (
             besked
             + f"\n\nDisse retter er allerede foreslået, lav {mangler} ANDRE:\n"
             + ", ".join(r["navn"] for r in retter)
+            + (
+                "\n\nKategorierne {} er fyldt op — foreslå ikke flere af dem.".format(
+                    " og ".join("'{}'".format(k) for k in fyldte)
+                )
+                if fyldte else ""
+            )
         )
         svar2 = await _kald(system, ekstra_besked, VAERKTOEJ_FORSLAG, 4000)
-        retter += _valider_forslag(svar2.get("retter", []), gyldige)
+        retter = _haandhaev_lofter(
+            retter + _valider_forslag(_udpak_retter(svar2), gyldige), regler
+        )
 
     return retter[: config.ANTAL_FORSLAG]
 
 
+# Felter skabelonerne og `web._beriget()` regner med at have
+PAAKRAEVEDE_FELTER = ("navn", "beskrivelse", "tid_min", "pris_pr_portion")
+
+
 def _valider_forslag(retter: list[dict], gyldige_ids: set[str]) -> list[dict]:
-    """Smider retter væk der refererer til tilbud som ikke findes."""
+    """Smider retter væk der ikke er brugbare.
+
+    Skemaet lover objekter med alle felter udfyldt, men det er set svigte i
+    praksis — modellen har returneret en ren streng i listen. Går sådan én
+    igennem, vælter hele ugen med en uforståelig AttributeError.
+    """
     ok = []
     for ret in retter:
-        ids = [str(i) for i in ret.get("tilbuds_ids", [])]
+        if not isinstance(ret, dict):
+            log.warning("Kasserer et forslag der ikke er et objekt: %.80r", ret)
+            continue
+        mangler = [f for f in PAAKRAEVEDE_FELTER if ret.get(f) in (None, "")]
+        if mangler:
+            log.warning("Kasserer '%s' — mangler felter: %s", ret.get("navn"), mangler)
+            continue
+        if not isinstance(ret.get("tilbuds_ids"), list):
+            log.warning("Kasserer '%s' — tilbuds_ids er ikke en liste", ret.get("navn"))
+            continue
+        ids = [str(i) for i in ret["tilbuds_ids"]]
         ukendte = [i for i in ids if i not in gyldige_ids]
         if ukendte:
             log.warning("Kasserer '%s' — ukendte tilbuds-ID'er: %s", ret.get("navn"), ukendte)
@@ -212,15 +426,74 @@ def _valider_forslag(retter: list[dict], gyldige_ids: set[str]) -> list[dict]:
     return ok
 
 
+def _basisvaremoenster(altid: list[str]) -> "re.Pattern | None":
+    """Mønster der matcher varer husstanden altid har hjemme.
+
+    Korte ord kun som helt ord — 'mel' må ikke fange 'melon'. Ord på fem
+    tegn og derover også som forstavelse, så 'pasta' fanger 'pastaskruer'.
+    Flertals-'er' trimmes af stammen, så 'bouillonterninger' i YAML'en også
+    fanger 'bouillonterning' i ental.
+    """
+    dele = []
+    for a in altid:
+        a = str(a).strip()
+        if not a:
+            continue
+        if len(a) >= 5:
+            stamme = a[:-2] if a.endswith("er") and len(a) > 6 else a
+            dele.append(re.escape(stamme) + r"\w*")
+        else:
+            dele.append(re.escape(a))
+    if not dele:
+        return None
+    return re.compile(r"\b(" + "|".join(dele) + r")\b", re.IGNORECASE)
+
+
+def _fjern_basisvarer(madplan: dict, praef: dict) -> dict:
+    """Luger varer fra 'har_altid_hjemme' ud af indkøbslisten.
+
+    Prompten beder allerede om det, men modellen glemmer nogle af dem —
+    målt til 3 ud af 19 varer. Samme lærestreg som med kostreglerne: bed om
+    det i prompten, og ryd op bagefter.
+    """
+    moenster = _basisvaremoenster(praef.get("har_altid_hjemme") or [])
+    if not moenster:
+        return madplan
+    for gruppe in madplan.get("indkoebsliste") or []:
+        beholdt = []
+        for vare in gruppe.get("varer") or []:
+            navn = str(vare.get("vare", ""))
+            if moenster.search(navn):
+                log.info("Fjerner '%s' fra listen — står i har_altid_hjemme", navn)
+                continue
+            beholdt.append(vare)
+        gruppe["varer"] = beholdt
+    madplan["indkoebsliste"] = [
+        g for g in (madplan.get("indkoebsliste") or []) if g.get("varer")
+    ]
+    return madplan
+
+
 async def lav_madplan(valgte: list[dict], tilbud: list[dict], praef: dict) -> dict:
     efter_id = {t["id"]: t for t in tilbud}
-    portioner = praef.get("antal_personer", 4)
+    standard = praef.get("standard_portioner", 4)
 
     linjer = []
     for ret in valgte:
-        brugte = [efter_id[i] for i in ret["tilbuds_ids"] if i in efter_id]
-        varer = "; ".join(f"{b['navn']} ({b['detalje']}) {b['pris']:.2f} kr." for b in brugte)
-        linjer.append(f"- {ret['navn']}: {ret['beskrivelse']}\n  På tilbud: {varer}")
+        portioner = ret.get("portioner") or standard
+        linjer.append("- {} — til {} personer".format(ret["navn"], portioner))
+        if ret.get("beskrivelse"):
+            linjer.append("  {}".format(ret["beskrivelse"]))
+        brugte = [efter_id[i] for i in ret.get("tilbuds_ids") or [] if i in efter_id]
+        if brugte:
+            linjer.append(
+                "  På tilbud: "
+                + "; ".join(
+                    f"{b['navn']} ({b['detalje']}) {b['pris']:.2f} kr." for b in brugte
+                )
+            )
+        elif ret.get("egen"):
+            linjer.append("  Familiens eget ønske — der er ingen tilbud knyttet til den.")
 
     system = (
         "Du skriver opskrifter til en dansk husstand. Skriv klart og kort, som "
@@ -229,15 +502,22 @@ async def lav_madplan(valgte: list[dict], tilbud: list[dict], praef: dict) -> di
         "Indkøbslisten skal være SAMLET på tværs af alle retter (læg ens varer "
         "sammen — ikke 'løg' tre gange) og grupperet efter butiksafdeling i den "
         "rækkefølge man går gennem en REMA: Frugt & grønt, Brød, Køl, Mejeri, "
-        "Ost, Kød & fisk, Frost, Kolonial. Marker hvilke varer der er på tilbud."
+        "Ost, Kød & fisk, Frost, Kolonial. Marker hvilke varer der er på tilbud.\n\n"
+        "Retterne kan have forskelligt antal personer. Indkøbslisten skal "
+        "dække summen af dem alle."
     )
 
     besked = (
-        f"Skriv opskrifter til {portioner} personer for disse retter:\n\n"
+        "Skriv opskrifter til disse retter. Hver ret har sit eget antal "
+        "personer — brug præcis det tal i `portioner`, og skalér mængderne "
+        "efter det:\n\n"
         + "\n".join(linjer)
         + f"\n\nHusstandens præferencer:\n{_praeferencetekst(praef)}\n\n"
         "Antag at husstanden har salt, peber, olie, smør og almindelige tørre "
-        "krydderier — dem skal du ikke skrive på indkøbslisten."
+        "krydderier — dem skal du ikke skrive på indkøbslisten. Det samme "
+        "gælder alt under 'har_altid_hjemme' i præferencerne: brug det gerne "
+        "i opskrifterne, men skriv det ikke på listen."
     )
 
-    return await _kald(system, besked, VAERKTOEJ_MADPLAN, 8000)
+    madplan = await _kald(system, besked, VAERKTOEJ_MADPLAN, 8000)
+    return _fjern_basisvarer(madplan, praef)

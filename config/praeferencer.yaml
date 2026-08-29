@@ -1,22 +1,41 @@
 # Denne fil styrer hvordan forslagene rammer. Ret den til jeres husstand —
 # det er her systemet går fra generisk til jeres.
 
-antal_personer: 4
+# Startværdien for portioner på hver ret. Antallet vælges pr. ret i
+# websitet, så en plan kan tage højde for hvem der er hjemme.
+standard_portioner: 4
 
 # Ting der aldrig må foreslås
 allergier:
-  - nødder
 
 # Ting I ikke gider, uden at det er en allergi
 kan_vi_ikke_lide:
-  - leverpostej
-  - blomkål
+  - lever
+  - bladselleri
 
 # Hvad I gerne vil have mere af
 oensker:
-  - mindst én vegetarisk ret om ugen
+  - maks én vegetarisk ret om ugen
   - gerne fisk en gang imellem
-  - børnevenligt, ikke for stærkt
+  - hurtige retter på hverdage, 30 - 40 minutter
+
+# Regler for hvilke slags retter der må foreslås.
+# 'profil' er fri tekst og sendes ordret til modellen som krav.
+# 'maks_*' er hårde lofter der håndhæves i koden — modellen overholder dem
+# ikke altid af sig selv. Mærkater man kan sætte loft på:
+#   kategori: koed, fisk, vegetar
+#   køkken:   dansk, italiensk, asiatisk, mexicansk, mellemoestlig, andet
+#   pris:     dyre (kræver at dyr_over_kr er sat)
+kostregler:
+  profil:
+    - proteinrige retter
+    - kaloriefattige retter
+  maks_vegetar: 1
+  maks_fisk: 1
+  maks_asiatisk: 1
+  # Højst én dyr ret. Grænsen gælder pr. portion.
+  maks_dyre: 1
+  dyr_over_kr: 45
 
 # Praktiske rammer
 hverdag_maks_minutter: 30
@@ -24,16 +43,13 @@ weekend_maks_minutter: 75
 
 # Basisvarer I altid har hjemme — kommer ikke på indkøbslisten
 har_altid_hjemme:
-  - ris
-  - pasta
   - løg
   - hvidløg
-  - dåsetomater
   - olivenolie
   - mel
   - bouillonterninger
 
 # Fritekst der sendes med til modellen. Skriv hvad som helst her.
 noter: >
-  Vi spiser omkring kl. 18. Den ene voksne arbejder sent om torsdagen,
-  så noget der kan varmes op er godt der. Rester til madpakker er et plus.
+  Vi spiser omkring kl. 18. Den flere er hjemme sent hver anden torsdag,
+  så noget der kan varmes op er godt der.
