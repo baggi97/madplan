@@ -379,8 +379,13 @@ async def foreslaa_retter(tilbud: list[dict], praef: dict) -> list[dict]:
         "aktuelle tilbud. Du foreslår almindelig, realistisk hverdagsmad — ikke "
         "restaurantretter. Svar altid på dansk.\n\n"
         "Regler:\n"
-        "1. Hver ret SKAL bygge på 2-4 varer fra tilbudslisten. Resten må gerne "
-        "være almindelige basisvarer (ris, pasta, løg, krydderier, mel).\n"
+        "1. Hver ret SKAL bygge på mindst én vare fra tilbudslisten, gerne to "
+        "eller tre — men kun varer der faktisk hører sammen i retten. Resten "
+        "må gerne være almindelige basisvarer (ris, pasta, løg, krydderier).\n"
+        "1b. Retten skal være ét måltid som nogen ville lave og servere. Sæt "
+        "ikke varer sammen alene fordi de begge er på tilbud: frikadeller og "
+        "suppe er to forskellige måltider, ikke ét. Er du i tvivl, så brug "
+        "færre tilbud frem for at tvinge noget sammen.\n"
         "2. Du må KUN referere til ID'er der står i tilbudslisten. Find aldrig "
         "varer eller priser på.\n"
         "3. Variation: forskellige proteinkilder og køkkener på tværs af de 10 "
@@ -407,7 +412,10 @@ async def foreslaa_retter(tilbud: list[dict], praef: dict) -> list[dict]:
     )
 
     svar = await _kald(system, besked, VAERKTOEJ_FORSLAG, 4000)
-    retter = _haandhaev_lofter(_valider_forslag(_udpak_retter(svar), gyldige), regler)
+    retter = _haandhaev_lofter(
+        _fjern_uoenskede(_valider_forslag(_udpak_retter(svar), gyldige), tilbud, praef),
+        regler,
+    )
 
     # Fik vi for få gyldige retter, beder vi om erstatninger én gang.
     if len(retter) < config.ANTAL_FORSLAG:
@@ -435,7 +443,9 @@ async def foreslaa_retter(tilbud: list[dict], praef: dict) -> list[dict]:
         )
         svar2 = await _kald(system, ekstra_besked, VAERKTOEJ_FORSLAG, 4000)
         retter = _haandhaev_lofter(
-            retter + _valider_forslag(_udpak_retter(svar2), gyldige), regler
+            retter
+            + _fjern_uoenskede(_valider_forslag(_udpak_retter(svar2), gyldige), tilbud, praef),
+            regler,
         )
 
     return retter[: config.ANTAL_FORSLAG]
@@ -473,6 +483,50 @@ def _valider_forslag(retter: list[dict], gyldige_ids: set[str]) -> list[dict]:
             log.warning("Kasserer '%s' — ingen tilbud brugt", ret.get("navn"))
             continue
         ret["tilbuds_ids"] = ids
+        ok.append(ret)
+    return ok
+
+
+def _fravalgsmoenster(ord_: list) -> "re.Pattern | None":
+    """Matcher fravalgte varer — bevidst løsere end basisvaremønsteret.
+
+    'selleri' skal også fange 'bladselleri' og 'knoldselleri', så her matches
+    som delstreng. Afvejningen er en anden end ved indkøbslisten: en falsk
+    positiv koster ét forslag ud af ti, mens en forbier sætter noget på
+    bordet familien har sagt fra til.
+    """
+    dele = [re.escape(str(o).strip()) for o in (ord_ or []) if len(str(o).strip()) >= 4]
+    if not dele:
+        return None
+    return re.compile("|".join(dele), re.IGNORECASE)
+
+
+def _fjern_uoenskede(retter: list[dict], tilbud: list[dict], praef: dict) -> list[dict]:
+    """Kasserer retter der bygger på noget fra allergier eller kan_vi_ikke_lide.
+
+    Prompten beder allerede om det, men modellen foreslog bladselleri to uger
+    i træk selvom det stod på listen.
+    """
+    moenster = _fravalgsmoenster(
+        (praef.get("allergier") or []) + (praef.get("kan_vi_ikke_lide") or [])
+    )
+    if not moenster:
+        return retter
+
+    efter_id = {t["id"]: t for t in tilbud}
+    ok = []
+    for ret in retter:
+        varenavne = [
+            efter_id[i]["navn"] for i in (ret.get("tilbuds_ids") or []) if i in efter_id
+        ]
+        tekst = " ".join([ret.get("navn", ""), ret.get("beskrivelse", "")] + varenavne)
+        traef = moenster.search(tekst)
+        if traef:
+            log.warning(
+                "Kasserer '%s' — indeholder '%s', som står på fravalgslisten",
+                ret.get("navn"), traef.group(),
+            )
+            continue
         ok.append(ret)
     return ok
 

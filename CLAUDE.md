@@ -260,6 +260,22 @@ oversætter de almindelige tilfælde (ugyldig nøgle, tom konto, hastighedsgræn
 til dansk. Brug ikke `raise_for_status()` her — den giver kun
 `Client error '401 Unauthorized' for url ...`, som ingen kan handle på.
 
+**Fravalg håndhæves i koden.** `ai._fjern_uoenskede()` kasserer retter hvor
+`allergier` eller `kan_vi_ikke_lide` optræder i rettens navn, beskrivelse
+eller i navnet på et af de tilbud den bygger på. Prompten beder også om det,
+men modellen foreslog bladselleri to uger i træk selvom det stod på listen.
+
+Mønsteret matcher **delstreng**, ikke hele ord — modsat basisvarefilteret.
+'selleri' skal også fange 'bladselleri'. Afvejningen er en anden: en falsk
+positiv koster ét forslag ud af ti, mens en forbier sætter noget på bordet
+familien har sagt fra til.
+
+**Regel 1 kræver ikke længere 2-4 tilbud pr. ret.** Det pressede modellen til
+at hæfte urelaterede tilbud sammen — "frikadeller med suppe" var resultatet.
+Nu er kravet mindst ét tilbud, gerne to-tre, og kun varer der hører sammen i
+retten. Regel 1b siger det ligeud med det eksempel. Skruer man kravet op igen,
+kommer de mærkelige kombinationer tilbage.
+
 **Indkøbslisten luges bagefter.** `ai._fjern_basisvarer()` fjerner varer fra
 `har_altid_hjemme` som modellen alligevel skrev på listen. Prompten beder om
 det, men målt 2026-08-29 slap 3 ud af 19 varer igennem. Mønsteret matcher korte

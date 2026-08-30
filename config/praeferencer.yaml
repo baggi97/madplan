@@ -11,7 +11,9 @@ allergier:
 # Ting I ikke gider, uden at det er en allergi
 kan_vi_ikke_lide:
   - lever
+  - selleri
   - bladselleri
+  - knoldselleri
 
 # Hvad I gerne vil have mere af
 oensker:
