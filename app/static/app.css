@@ -75,13 +75,17 @@ li { list-style: none; }
 }
 
 .ugevaelger {
-  background: rgba(255, 255, 255, .1);
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(255, 255, 255, .1) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23ffffff' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 7px center;
+  background-size: 9px 6px;
   color: #fff;
   border: 1px solid rgba(255, 255, 255, .22);
   border-radius: 6px;
   font: inherit;
   font-size: .8rem;
-  padding: 4px 6px;
+  padding: 4px 22px 4px 8px;
+  cursor: pointer;
 }
 
 /* --- Sidelayout --------------------------------------------------- */
@@ -156,6 +160,7 @@ li { list-style: none; }
 
 .portioner {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
@@ -704,12 +709,19 @@ li { list-style: none; }
 
 /* --- ugedag pr. ret --------------------------------------------------- */
 
+/* WebKit ignorerer background, border-radius og det meste andet på en
+   <select> medmindre den native styling slås fra. Uden appearance:none ser
+   vælgeren ustylet ud på Safari — altså på iPhonen. Til gengæld forsvinder
+   den native pil, så vi tegner vores egen. */
 .dag-vaelger {
+  appearance: none;
+  -webkit-appearance: none;
   margin-left: auto;
-  padding: 5px 8px;
+  padding: 6px 26px 6px 10px;
   border: 1.5px solid var(--linje);
   border-radius: 8px;
-  background: var(--kort);
+  background: var(--kort) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%236d7889' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 9px center;
+  background-size: 9px 6px;
   font: inherit;
   font-size: .82rem;
   color: var(--blaek-mild);

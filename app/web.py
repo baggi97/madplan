@@ -23,6 +23,24 @@ skabeloner = Jinja2Templates(directory=str(HER / "templates"))
 DAGE = ("mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "søndag")
 
 
+def _statisk_version(stier: list | None = None) -> str:
+    """Skifter når app.css eller app.js gør.
+
+    Hænges på som ?v= i skabelonen. Uden det serveres filerne kun med ETag, og
+    browseren må selv gætte hvor længe den holder på dem — så en designrettelse
+    kan være usynlig indtil nogen tømmer cachen. På en telefon med siden på
+    hjemmeskærmen er det ikke ligetil.
+
+    Beregnes ved import, så en genstart efter en opdatering giver en ny værdi.
+    """
+    stier = stier or [HER / "static" / "app.css", HER / "static" / "app.js"]
+    seneste = max((s.stat().st_mtime_ns for s in stier if s.exists()), default=0)
+    return format(seneste, "x")[-8:]
+
+
+STATISK_VERSION = _statisk_version()
+
+
 def _beriget(uge: dict) -> dict:
     """Slår tilbuds-ID'er op, så skabelonerne kan vise varenavne og rabatter."""
     efter_id = {t["id"]: t for t in uge.get("tilbud", [])}
@@ -177,6 +195,7 @@ async def uge_side(request: Request, noegle: str):
             "er_denne_uge": er_denne_uge,
             "antal_valgt": _antal_valgt(uge),
             "dage": DAGE,
+            "v": STATISK_VERSION,
             "totaler": _totaler(uge),
             "arbejder": uge["status"] == store.ARBEJDER,
             "alle_uger": store.alle_uger(),

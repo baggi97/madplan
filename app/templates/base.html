@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/app.css?v={{ v }}">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/static/ikon-192.png" sizes="192x192">
 <!-- iOS bruger ikke manifestets ikoner til hjemmeskærmen -->
@@ -46,7 +46,7 @@
 
 {% block bundbjaelke %}{% endblock %}
 
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v={{ v }}"></script>
 {% block script %}{% endblock %}
 </body>
 </html>

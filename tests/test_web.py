@@ -329,3 +329,23 @@ def test_gammel_uge_uden_rester_renderer_stadig(klient):
     r = klient.get(f"/uge/{UGE}")
     assert r.status_code == 200
     assert "Rester at bruge" not in r.text
+
+
+def test_statiske_filer_faar_en_version(klient, vaelger_uge):
+    """Uden ?v= kan en designrettelse vaere usynlig bag browserens cache."""
+    html = klient.get(f"/uge/{UGE}").text
+    assert "/static/app.css?v=" in html
+    assert "/static/app.js?v=" in html
+
+
+def test_versionen_skifter_naar_filen_goer(tmp_path):
+    fil = tmp_path / "app.css"
+    fil.write_text("a", encoding="utf-8")
+    foer = web._statisk_version([fil])
+    import os, time
+    os.utime(fil, ns=(0, int(time.time_ns()) + 10**9))
+    assert web._statisk_version([fil]) != foer
+
+
+def test_version_uden_filer_vaelter_ikke(tmp_path):
+    assert web._statisk_version([tmp_path / "findes-ikke.css"]) == "0"

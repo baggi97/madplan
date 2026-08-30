@@ -385,6 +385,19 @@ plus optælling af hvad der ofte vælges og fravælges.
 - **Fejl skal være handlingsanvisende.** Ingen "noget gik galt" — sig hvad der
   skete og hvad man kan gøre.
 
+**`<select>` skal have `appearance: none`.** WebKit ignorerer `background`,
+`border-radius` og det meste andet på en select medmindre den native styling
+slås fra — så ser den ustylet ud på Safari, altså på telefonerne. Til gengæld
+forsvinder den native pil, så `.dag-vaelger` og `.ugevaelger` tegner deres egen
+som en data-URI. Farverne står som literaler derinde; CSS-variabler virker ikke
+i en data-URI.
+
+**CSS og JS hænges op med `?v=`.** `web._statisk_version()` bruger filernes
+mtime, så en opdatering giver et nyt link. Uden det serveres de kun med ETag,
+og browseren må selv gætte hvor længe den holder på dem — en designrettelse kan
+være usynlig indtil nogen tømmer cachen, og på en telefon med siden på
+hjemmeskærmen er det ikke ligetil.
+
 ### Designtokens
 
 Ligger som CSS-variabler i toppen af `app.css`. Prisskiltet (`.skilt`,
