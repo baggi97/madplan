@@ -188,7 +188,8 @@ Hele sien, samme måling — det er det sidste tal `MIN_TILBUD` vurderes imod:
   212  is_on_discount
   179  og reelt billigere (price < normal_price)
   123  og i MAD_AFDELINGER
-  105  og ikke fanget af UDELUK   ← det er dem AI'en ser
+  105  og ikke fanget af UDELUK
+   93  og ikke en færdigsuppe      ← det er dem AI'en ser
 ```
 
 Vigtige felter under `pricing`:
@@ -209,6 +210,13 @@ beskærer til 200 tegn.
 hjemme i en madplan: slik, sodavand, alkohol, dyrefoder, vaskepulver. Vær
 opmærksom på `\bis\b` — den fjerner is, men rammer også alt andet hvor "is"
 står som selvstændigt ord.
+
+`rema.UDELUK_NAVN` fjerner færdigsupper. Den er adskilt fra `UDELUK`, fordi
+den **kun** må se på varenavnet: REMA's suppe-kategori rummer også suppeurter
+og kødboller, som er ingredienser til rigtig mad. Mønsteret rammer ord der
+slutter på `-suppe`, så `suppehøne` og `suppeurter` bliver stående. Målt
+2026-08-30 fjernede den 12 varer; matchede den også på kategorien, ville den
+have taget 15 og dermed tre brugbare ingredienser med.
 
 **REMA's tilbud skifter om lørdagen**, så søndag morgen giver en frisk uge.
 

@@ -23,6 +23,15 @@ UDELUK = re.compile(
     re.IGNORECASE,
 )
 
+# Færdigsupper. Modellen hæftede dem gerne på en portion kød og kaldte det en
+# ret — "hakket oksekød med gullaschsuppe" er ikke et måltid.
+#
+# Denne kigger KUN på varenavnet, ikke på kategorien som UDELUK gør. REMA har
+# en suppe-kategori der også rummer suppeurter og kødboller, og de er
+# ingredienser til rigtig mad. Mønsteret rammer ord der slutter på -suppe, så
+# 'suppehøne' og 'suppeurter' bliver stående.
+UDELUK_NAVN = re.compile(r"\w*suppe\b", re.IGNORECASE)
+
 
 async def hent_tilbud() -> list[dict]:
     """Returnerer en normaliseret liste af madvarer på tilbud."""
@@ -65,6 +74,8 @@ def _normaliser(vare: dict, afd: dict, kat: dict) -> dict | None:
     navn = (vare.get("name") or "").strip()
     detalje = (vare.get("underline") or "").strip()
     if UDELUK.search(navn + " " + detalje + " " + str(kat.get("name", ""))):
+        return None
+    if UDELUK_NAVN.search(navn):
         return None
 
     return {
