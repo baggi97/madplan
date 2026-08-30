@@ -366,6 +366,12 @@ stadig ordentligt ud.
   browserens nøgle ikke matchede serverens — fluebenene forsvandt ved
   genindlæsning. Nøglerne er nu rene indeks (`g0v1`).
 - **`is_advertised` er ikke det samme som på tilbud.** Se ovenfor.
+- **Compose-filen på NAS'en er en manuel kopi.** Watchtower opdaterer imaget,
+  ikke compose-filen, så den driver fra repoet indtil nogen henter den ned.
+  Ændrer man en standard i compose-filen — fx `ANTAL_FORSLAG:-15` — sker der
+  ingenting på NAS'en før filen er hentet igen. Og ændringer i `.env` kræver
+  et `up -d`, fordi miljøet bages ind ved oprettelsen og Watchtowers
+  genskabelse kopierer den gamle konfiguration med.
 - **`docker-compose.synology.yml` opremser miljøvariablerne én for én.** Den
   bruger ikke `env_file`, fordi det ikke virkede på DSM's Compose v1. Prisen
   er at listen skal holdes synkroniseret: tilføjer man noget i `config.py`

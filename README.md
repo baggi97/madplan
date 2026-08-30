@@ -218,6 +218,42 @@ kører NAS'en den nye version.
 `data/` og `config/` er volumes, så ugerne, historikken og præferencerne
 overlever en opdatering. Kun koden skiftes ud.
 
+### Watchtower opdaterer imaget — ikke compose-filen
+
+Det er værd at have med, for det koster tid hver gang man glemmer det.
+Watchtower henter et nyt image og genskaber containeren, men den kender ikke
+til compose-filen. `docker-compose.synology.yml` på NAS'en er en manuel kopi,
+og den driver fra repoet indtil du selv henter den ned.
+
+Det betyder to ting:
+
+- **Nye indstillinger når ikke frem af sig selv.** Filen opremser
+  miljøvariablerne én for én, så tilføjer vi en, skal filen hentes ned igen.
+  Ellers findes variablen bare ikke i containeren, og funktionen ser ud til
+  ikke at virke.
+- **Ændrer du `.env`, sker der ingenting før containeren genskabes.** Miljøet
+  bages ind ved oprettelsen, og Watchtowers genskabelse kopierer den gamle
+  konfiguration med over. Kør `up -d` selv.
+
+Hent den nyeste compose-fil og genstart:
+
+```bash
+cd /volume1/docker/madplan
+sudo curl -fsSLO https://raw.githubusercontent.com/baggi97/madplan/main/docker-compose.synology.yml
+sudo docker-compose -f docker-compose.synology.yml up -d
+```
+
+Er repoet privat, virker `curl` ikke — hent filen fra GitHub i browseren, eller
+`git clone` repoet et sted på NAS'en og kopiér den derfra.
+
+Tjek bagefter at containeren kører med det du tror:
+
+```bash
+sudo docker exec madplan python -c "
+from app import config
+print(config.ANTAL_FORSLAG, config.MIN_MED_TILBUD, config.UNDGAA_UGER)"
+```
+
 **Vil du ikke have automatisk opdatering?** Slet `watchtower`-servicen fra
 compose-filen. Så henter du selv nye versioner med `docker compose pull &&
 docker compose up -d`.
