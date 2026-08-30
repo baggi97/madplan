@@ -402,22 +402,45 @@ stadig ordentligt ud.
 
 ## Test
 
-Der er ingen testsuite endnu. Sådan er der testet manuelt:
+```bash
+pip install -r requirements-dev.txt
+pytest -q
+```
+
+115 tests, ingen netværkskald, ingen brug af den rigtige `data/`-mappe —
+`conftest.py` peger `config.DATA_DIR` på en `tmp_path` pr. test.
+
+Testene er ikke pyntearbejde. **Hvert filter i `ai.py` koder en fejl vi har
+ramt i produktion**, og testen navngiver hvilken: det dobbeltkodede JSON-svar,
+strengen midt i retterlisten, bladselleri der slap gennem fravalgslisten,
+spidskål tre aftener på en uge, gullaschsuppen hæftet på hakket kød,
+basisvarer der endte på indkøbslisten. Fjerner nogen et af de værn for at
+forenkle, falder en test med en besked om hvorfor det var der.
+
+| Fil | Dækker |
+|---|---|
+| `test_ai.py` | Filtrene og håndhævelsen — lofter, spredning, fravalg, gentagelser, basisvarer, sæson |
+| `test_kald.py` | Gentagelse ved 429 og 5xx mod en lokal server, og at 4xx **ikke** gentages |
+| `test_rema.py` | Normalisering, `UDELUK`, `UDELUK_NAVN`, prompt-linjer |
+| `test_store.py` | Ugefiler, atomisk skrivning, historik, abonnementer |
+| `test_web.py` | Endpoints gennem `TestClient` — grænser, 400, 409, egne retter |
+
+Async-funktioner køres med `asyncio.run()` i testkroppen; der er bevidst ingen
+`pytest-asyncio`, så udviklingsafhængigheden er ét enkelt pakke.
+
+`pytest` kører i GitHub Actions som `needs` for docker-jobbet, så et brækket
+filter ikke kan nå NAS'en. `tests/` og `requirements-dev.txt` er i
+`.dockerignore` — imaget skal ikke bære testværktøj.
+
+Ting der stadig kun er afprøvet i hånden:
 
 ```bash
 # Datalaget mod live-API
 python -c "import asyncio; from app import rema; print(len(asyncio.run(rema.hent_tilbud())))"
 
-# Hele flowet uden at bruge API-kvote: monkeypatch ai.foreslaa_retter
-# og ai.lav_madplan med stubs der returnerer faste dicts.
-
 # UI i rigtig browser
 playwright: viewport 420x880, klik på .ret og .boks, reload, tjek persistens
 ```
-
-**Første oplagte opgave:** lav pytest-dækning af `rema._normaliser`,
-`ai._valider_forslag` og `store`-funktionerne. Det er de tre steder hvor en
-regression ville være dyr og svær at opdage.
 
 ## Idéer der ikke er bygget
 

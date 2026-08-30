@@ -11,3 +11,7 @@ data
 
 # Dokumentation
 *.md
+
+# Tests hører ikke i imaget
+tests
+requirements-dev.txt

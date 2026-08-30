@@ -1,0 +1,4 @@
+# Kun til udvikling. Imaget skal ikke bære testværktøj — .dockerignore holder
+# tests/ ude, og Dockerfilen installerer kun requirements.txt.
+-r requirements.txt
+pytest==8.3.4
