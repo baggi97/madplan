@@ -737,3 +737,24 @@ li { list-style: none; }
 
 .taeller-pris { color: var(--blaek-mild); }
 .spar-note { display: block; margin-top: 3px; color: var(--roed); font-weight: 600; }
+
+/* --- rester ----------------------------------------------------------- */
+
+.rester {
+  margin-top: 22px;
+  padding: 14px 16px;
+  background: var(--kort);
+  border: 1.5px solid var(--linje);
+  border-left: 3px solid var(--gul);
+  border-radius: var(--radius);
+}
+
+.rester-titel { font-size: .96rem; margin-bottom: 8px; }
+
+.rester-liste li {
+  font-size: .88rem;
+  color: var(--blaek-mild);
+  padding: 3px 0;
+}
+
+.rester-liste strong { color: var(--blaek); }

@@ -228,3 +228,36 @@ def test_ny_maks_regel_virker_uden_kodeaendring():
     regler = {"maks_mexicansk": 1}
     ind = [ret("A", koekken="mexicansk"), ret("B", koekken="mexicansk")]
     assert [r["navn"] for r in ai._haandhaev_lofter(ind, regler)] == ["A"]
+
+
+# --- rester i skemaet -------------------------------------------------
+
+def test_rester_er_valgfrit_i_skemaet():
+    """Uger gemt før feltet fandtes skal stadig kunne læses."""
+    skema = ai.VAERKTOEJ_MADPLAN["input_schema"]
+    assert "rester" in skema["properties"]
+    assert "rester" not in skema["required"]
+
+
+def test_dagen_kommer_med_i_prompten_til_kald_2():
+    """Uden dagen kan resterne ikke pege på 'torsdagens ret'."""
+    import asyncio
+    fanget = {}
+
+    async def falsk_kald(system, besked, vaerktoej, maks):
+        fanget["system"] = system
+        fanget["besked"] = besked
+        return {"opskrifter": [], "indkoebsliste": []}
+
+    oprindelig = ai._kald
+    ai._kald = falsk_kald
+    try:
+        asyncio.run(ai.lav_madplan(
+            [{"navn": "Karry", "portioner": 3, "dag": "torsdag", "tilbuds_ids": []}],
+            [], {"standard_portioner": 4},
+        ))
+    finally:
+        ai._kald = oprindelig
+
+    assert "til 3 personer (torsdag)" in fanget["besked"]
+    assert "rester" in fanget["system"].lower()

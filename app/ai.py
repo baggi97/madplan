@@ -139,6 +139,31 @@ VAERKTOEJ_MADPLAN = {
                     "required": ["afdeling", "varer"],
                 },
             },
+            "rester": {
+                "type": "array",
+                "description": (
+                    "Varer der bliver reelt tilovers fordi de sælges i større "
+                    "enheder end retterne bruger, og hvad de kan bruges til. "
+                    "Tom liste hvis der ikke er nogen nævneværdige."
+                ),
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "vare": {
+                            "type": "string",
+                            "description": "Fx 'en halv dåse kokosmælk'",
+                        },
+                        "forslag": {
+                            "type": "string",
+                            "description": (
+                                "Hvad den kan bruges til. Peg gerne på en anden "
+                                "af ugens retter og dens dag."
+                            ),
+                        },
+                    },
+                    "required": ["vare", "forslag"],
+                },
+            },
         },
         "required": ["opskrifter", "indkoebsliste"],
     },
@@ -755,7 +780,12 @@ async def lav_madplan(valgte: list[dict], tilbud: list[dict], praef: dict) -> di
     linjer = []
     for ret in valgte:
         portioner = ret.get("portioner") or standard
-        linjer.append("- {} — til {} personer".format(ret["navn"], portioner))
+        dag = ret.get("dag") or ""
+        linjer.append(
+            "- {} — til {} personer{}".format(
+                ret["navn"], portioner, " ({})".format(dag) if dag else ""
+            )
+        )
         if ret.get("beskrivelse"):
             linjer.append("  {}".format(ret["beskrivelse"]))
         brugte = [efter_id[i] for i in ret.get("tilbuds_ids") or [] if i in efter_id]
@@ -780,7 +810,12 @@ async def lav_madplan(valgte: list[dict], tilbud: list[dict], praef: dict) -> di
         "rækkefølge man går gennem en REMA: Frugt & grønt, Brød, Køl, Mejeri, "
         "Ost, Kød & fisk, Frost, Kolonial. Marker hvilke varer der er på tilbud.\n\n"
         "Retterne kan have forskelligt antal personer. Indkøbslisten skal "
-        "dække summen af dem alle."
+        "dække summen af dem alle.\n\n"
+        "Fyld til sidst `rester` ud: varer der bliver reelt tilovers fordi de "
+        "sælges i større enheder end retterne bruger — en halv dåse kokosmælk, "
+        "resten af grønkålen. Skriv hvad de kan bruges til, og peg gerne på en "
+        "anden af ugens retter og dens dag. Er der ingen nævneværdige rester, "
+        "så lad listen være tom frem for at finde på noget."
     )
 
     besked = (

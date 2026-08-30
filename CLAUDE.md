@@ -353,6 +353,14 @@ Nu er kravet mindst ét tilbud, gerne to-tre, og kun varer der hører sammen i
 retten. Regel 1b siger det ligeud med det eksempel. Skruer man kravet op igen,
 kommer de mærkelige kombinationer tilbage.
 
+**Rester noteres i kald 2.** `rester` i `VAERKTOEJ_MADPLAN` er en liste af
+`{vare, forslag}` — hvad der bliver reelt tilovers fordi varen sælges i større
+enheder end retten bruger, og hvad det kan bruges til. Feltet er **ikke**
+`required`, så uger gemt før det fandtes stadig renderer.
+
+Retternes dag sendes med i prompten netop for det: så kan noten pege på
+"grønkålssalaten mandag" i stedet for at være generisk. Verificeret 2026-08-30.
+
 **Indkøbslisten luges bagefter.** `ai._fjern_basisvarer()` fjerner varer fra
 `har_altid_hjemme` som modellen alligevel skrev på listen. Prompten beder om
 det, men målt 2026-08-29 slap 3 ud af 19 varer igennem. Mønsteret matcher korte
@@ -491,4 +499,3 @@ playwright: viewport 420x880, klik på .ret og .boks, reload, tjek persistens
 - Portionsjustering pr. ret i UI'et
 - "Har vi det hjemme?"-trin før indkøbslisten låses
 - Eksport af opskrift til print
-- Rester-håndtering: foreslå en ret der bruger det der bliver tilovers

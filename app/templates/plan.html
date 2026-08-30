@@ -47,6 +47,17 @@
   </div>
   {% endfor %}
 
+  {% if plan.rester %}
+  <section class="rester">
+    <h3 class="rester-titel">Rester at bruge</h3>
+    <ul class="rester-liste">
+      {% for r in plan.rester %}
+      <li><strong>{{ r.vare }}</strong> — {{ r.forslag }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
   <button class="knap knap-sekundaer knap-bred" data-handling="nulstil-kryds">
     Ryd afkrydsninger
   </button>

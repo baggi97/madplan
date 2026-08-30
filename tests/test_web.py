@@ -288,3 +288,44 @@ def test_plan_siden_viser_pris_og_dage(klient):
     assert "Tilbuddene sparer 10 kr." in html
     assert "Mandag" in html and "Fredag" in html
     assert html.index("Suppe") < html.index("Fisk")   # mandag før fredag
+
+
+# --- rester -----------------------------------------------------------
+
+def _uge_med_madplan(**madplan_ekstra):
+    uge = store.tom_uge(UGE)
+    uge.update({
+        "status": store.KLAR,
+        "forslag": [ret("Karry", portioner=4)],
+        "valgt": [0],
+        "madplan": {
+            "opskrifter": [{"navn": "Karry", "portioner": 4, "tid_min": 20,
+                            "ingredienser": ["a"], "fremgangsmaade": ["b"]}],
+            "indkoebsliste": [{"afdeling": "Kolonial",
+                               "varer": [{"vare": "1 dåse kokosmælk", "paa_tilbud": False}]}],
+            **madplan_ekstra,
+        },
+    })
+    store.gem_uge(uge)
+
+
+def test_rester_vises(klient):
+    _uge_med_madplan(rester=[{"vare": "en halv dåse kokosmælk",
+                             "forslag": "brug den i torsdagens suppe"}])
+    html = klient.get(f"/uge/{UGE}").text
+    assert "Rester at bruge" in html
+    assert "en halv dåse kokosmælk" in html
+    assert "torsdagens suppe" in html
+
+
+def test_ingen_rester_giver_ingen_sektion(klient):
+    _uge_med_madplan(rester=[])
+    assert "Rester at bruge" not in klient.get(f"/uge/{UGE}").text
+
+
+def test_gammel_uge_uden_rester_renderer_stadig(klient):
+    """Feltet er ikke required — uger gemt før ændringen må ikke vælte."""
+    _uge_med_madplan()
+    r = klient.get(f"/uge/{UGE}")
+    assert r.status_code == 200
+    assert "Rester at bruge" not in r.text
