@@ -19,6 +19,10 @@ services:
     # af compose-filen til variabel-substitution, og på DSM's Compose v1 nåede
     # env_file ikke ind i containeren. Her læses værdierne direkte i stedet,
     # med fornuftige standarder hvis de ikke står i .env.
+    #
+    # VIGTIGT: listen er udtømmende. Tilføjer du en ny indstilling i
+    # config.py, skal den også med her — ellers når den aldrig frem, og
+    # funktionen ser bare ud til ikke at virke.
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5}
@@ -30,6 +34,10 @@ services:
       DEADLINE_CRON: ${DEADLINE_CRON:-sun 18}
       ANTAL_FORSLAG: ${ANTAL_FORSLAG:-10}
       ANTAL_RETTER: ${ANTAL_RETTER:-5}
+      # Push. Tomme nøgler slår det fra, så feltet må gerne stå tomt.
+      VAPID_OFFENTLIG_NOEGLE: ${VAPID_OFFENTLIG_NOEGLE:-}
+      VAPID_PRIVAT_NOEGLE: ${VAPID_PRIVAT_NOEGLE:-}
+      VAPID_KONTAKT: ${VAPID_KONTAKT:-mailto:madplan@eksempel.dk}
       # Containeren lytter altid på 8099 — porten mappes udefra herunder
       DATA_DIR: /data
       CONFIG_DIR: /config

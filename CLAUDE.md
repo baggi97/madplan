@@ -299,6 +299,11 @@ stadig ordentligt ud.
   browserens nøgle ikke matchede serverens — fluebenene forsvandt ved
   genindlæsning. Nøglerne er nu rene indeks (`g0v1`).
 - **`is_advertised` er ikke det samme som på tilbud.** Se ovenfor.
+- **`docker-compose.synology.yml` opremser miljøvariablerne én for én.** Den
+  bruger ikke `env_file`, fordi det ikke virkede på DSM's Compose v1. Prisen
+  er at listen skal holdes synkroniseret: tilføjer man noget i `config.py`
+  uden at føje det til compose-filen, når det aldrig ind i containeren, og
+  funktionen ser bare ud til ikke at virke. Det skete for VAPID-nøglerne.
 - **Ret-kortet er `<li class="ret-kort">`, ikke knappen.** Det var det
   oprindeligt, men portionsvælgeren skal ligge i kortet, og en `<button>` inde
   i en `<button>` er ugyldig HTML som browseren river fra hinanden. Kortets
