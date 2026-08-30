@@ -48,8 +48,19 @@ VAPID_KONTAKT = os.getenv("VAPID_KONTAKT", "mailto:madplan@eksempel.dk")
 FORSLAG_CRON = os.getenv("FORSLAG_CRON", "sun 8")
 DEADLINE_CRON = os.getenv("DEADLINE_CRON", "sun 18")
 
-ANTAL_FORSLAG = int(os.getenv("ANTAL_FORSLAG", "10"))
+ANTAL_FORSLAG = int(os.getenv("ANTAL_FORSLAG", "15"))
 ANTAL_RETTER = int(os.getenv("ANTAL_RETTER", "5"))  # fallback hvis ingen stemmer
+
+# Hvor mange af forslagene der skal bygge på ugens tilbud. Resten må være
+# almindelige sæsonretter — der er sjældent 15 fornuftige retter i én uges
+# tilbud, og så bliver de sidste til fyld hvis man tvinger dem igennem.
+MIN_MED_TILBUD = int(os.getenv("MIN_MED_TILBUD", "8"))
+
+# Retter serveret inden for så mange uger foreslås ikke igen
+UNDGAA_UGER = int(os.getenv("UNDGAA_UGER", "4"))
+# Hvor ens to retnavne må være før den nye regnes for en gentagelse.
+# Heuristik — hver frasortering logges, så tallet kan kalibreres.
+GENTAGELSE_GRAENSE = float(os.getenv("GENTAGELSE_GRAENSE", "0.72"))
 
 # Færre tilbud end dette betyder at kilden sandsynligvis er brudt
 MIN_TILBUD = int(os.getenv("MIN_TILBUD", "20"))

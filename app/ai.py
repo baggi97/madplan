@@ -10,6 +10,7 @@ siden på et tilbud der ikke findes.
 from __future__ import annotations
 
 import asyncio
+import difflib
 import json
 import logging
 import re
@@ -46,7 +47,11 @@ VAERKTOEJ_FORSLAG = {
                         "tilbuds_ids": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "ID'er fra tilbudslisten som retten bygger på. Kun ID'er der findes i listen.",
+                            "description": (
+                                "ID'er fra tilbudslisten som retten bygger på. Kun "
+                                "ID'er der findes i listen. TOM liste hvis det er en "
+                                "sæsonret der ikke bygger på ugens tilbud."
+                            ),
                         },
                         "kategori": {
                             "type": "string",
@@ -368,66 +373,109 @@ def _praeferencetekst(praef: dict) -> str:
     return json.dumps(praef, ensure_ascii=False, indent=2)
 
 
-async def foreslaa_retter(tilbud: list[dict], praef: dict) -> list[dict]:
-    gyldige = {t["id"] for t in tilbud}
-    undgaa = store.seneste_retter(6)
-    signal = store.praeferencesignal()
-    regler = praef.get("kostregler") or {}
+# Hvor mange gange vi beder om erstatninger hvis valideringen har luget for
+# meget væk. Lofterne er stramme nok til at én runde ikke altid rækker.
+FORSOEG_FORSLAG = 2
 
-    system = (
-        "Du planlægger ugens aftensmad for en dansk husstand ud fra REMA 1000's "
-        "aktuelle tilbud. Du foreslår almindelig, realistisk hverdagsmad — ikke "
-        "restaurantretter. Svar altid på dansk.\n\n"
+
+def _system_prompt(regler: dict) -> str:
+    maks_uden = max(config.ANTAL_FORSLAG - config.MIN_MED_TILBUD, 0)
+    return (
+        "Du planlægger ugens aftensmad for en dansk husstand. Du foreslår "
+        "almindelig, realistisk hverdagsmad — ikke restaurantretter. Svar "
+        "altid på dansk.\n\n"
+        "Forslagene er todelte:\n"
+        "A. Mindst {med} retter SKAL bygge på varer fra tilbudslisten.\n"
+        "B. De øvrige — højst {uden} — er sæsonretter UDEN tilbud. Lad "
+        "`tilbuds_ids` være tom for dem. Det skal være genkendelig dansk "
+        "hverdagsmad der passer til årstiden, ikke fyld: retter familien "
+        "ville lave alligevel.\n\n"
         "Regler:\n"
-        "1. Hver ret SKAL bygge på mindst én vare fra tilbudslisten, gerne to "
-        "eller tre — men kun varer der faktisk hører sammen i retten. Resten "
-        "må gerne være almindelige basisvarer (ris, pasta, løg, krydderier).\n"
+        "1. En ret i gruppe A bygger på mindst én vare fra tilbudslisten, "
+        "gerne to eller tre — men kun varer der faktisk hører sammen i "
+        "retten. Resten må gerne være almindelige basisvarer.\n"
         "1b. Retten skal være ét måltid som nogen ville lave og servere. Sæt "
         "ikke varer sammen alene fordi de begge er på tilbud: frikadeller og "
         "suppe er to forskellige måltider, ikke ét. Er du i tvivl, så brug "
         "færre tilbud frem for at tvinge noget sammen.\n"
         "2. Du må KUN referere til ID'er der står i tilbudslisten. Find aldrig "
-        "varer eller priser på.\n"
-        "3. Variation på tværs af de 10 forslag — og det gælder ikke kun "
-        "proteinet. Forskellige proteinkilder, forskellige køkkener, og "
+        "varer eller priser på. Skal en ret ikke bruge tilbud, så lad listen "
+        "være tom — opfind aldrig et ID.\n"
+        "3. Variation på tværs af alle {i_alt} forslag — og det gælder ikke "
+        "kun proteinet. Forskellige proteinkilder, forskellige køkkener, og "
         "forskellige grøntsager og tilbehør. Ikke fem retter med hakket "
         "oksekød, og ikke spidskål tre aftener på en uge. Brug højst den "
         "samme grøntsag eller det samme tilbehør i to retter, også selv om "
         "den er på tilbud.\n"
         "4. Mindst halvdelen skal kunne laves på 30 minutter eller mindre.\n"
-        "5. Foreslå ikke noget der ligner retterne på 'undgå'-listen.\n"
+        "5. Foreslå ikke noget der ligner retterne på 'undgå'-listen. Heller "
+        "ikke den samme ret med et nyt navn.\n"
         "6. Overhold alt under 'Krav til retterne'. Sæt `kategori` og "
         "`koekken` ærligt — det er dem kravene tælles på.\n"
         "7. Byg ikke retter på noget fra 'allergier' eller 'kan_vi_ikke_lide'. "
         "Nævn det heller ikke: ingen navne eller beskrivelser som "
         "'postejfri', 'uden nødder' eller 'undgået denne uge'. Find på noget "
         "andet, og lad som om varen ikke findes."
+    ).format(med=config.MIN_MED_TILBUD, uden=maks_uden, i_alt=config.ANTAL_FORSLAG)
+
+
+def _rens(retter: list[dict], tilbud: list[dict], praef: dict, undgaa: list[str]) -> list[dict]:
+    """Hele valideringskæden, i den rækkefølge den skal køre.
+
+    Gentagelser fjernes før lofterne, så en kasseret gentagelse ikke når at
+    optage pladsen i et loft.
+    """
+    gyldige = {t["id"] for t in tilbud}
+    regler = praef.get("kostregler") or {}
+    return _maks_uden_tilbud(
+        _spred_tilbud(
+            _haandhaev_lofter(
+                _fjern_gentagelser(
+                    _fjern_uoenskede(_valider_forslag(retter, gyldige), tilbud, praef),
+                    undgaa,
+                ),
+                regler,
+            ),
+            regler.get("maks_gentaget_tilbud"),
+        ),
+        max(config.ANTAL_FORSLAG - config.MIN_MED_TILBUD, 0),
     )
 
+
+async def foreslaa_retter(tilbud: list[dict], praef: dict) -> list[dict]:
+    undgaa = store.seneste_retter(config.UNDGAA_UGER)
+    signal = store.praeferencesignal()
+    regler = praef.get("kostregler") or {}
+    maaned, aarstid = _saeson()
+
+    system = _system_prompt(regler)
     besked = (
         f"Ugens tilbud i REMA 1000:\n{rema.til_prompt_linjer(tilbud)}\n\n"
+        f"Det er {maaned}, altså {aarstid} i Danmark. Sæsonretterne uden "
+        f"tilbud skal passe til årstiden.\n\n"
         f"{_regeltekst(regler)}"
         f"Husstandens præferencer:\n{_praeferencetekst(praef)}\n\n"
-        f"Serveret de sidste 6 uger (undgå disse):\n"
+        f"Serveret de sidste {config.UNDGAA_UGER} uger (undgå disse):\n"
         f"{', '.join(undgaa) if undgaa else 'ingen historik endnu'}\n\n"
         f"Valgt ofte tidligere: {', '.join(signal['ofte_valgt']) or 'intet endnu'}\n"
         f"Fravalgt ofte tidligere: {', '.join(signal['ofte_fravalgt']) or 'intet endnu'}\n\n"
-        f"Foreslå præcis {config.ANTAL_FORSLAG} retter."
+        f"Foreslå præcis {config.ANTAL_FORSLAG} retter, hvoraf mindst "
+        f"{config.MIN_MED_TILBUD} bygger på tilbud."
     )
 
-    svar = await _kald(system, besked, VAERKTOEJ_FORSLAG, 4000)
-    retter = _spred_tilbud(
-        _haandhaev_lofter(
-            _fjern_uoenskede(_valider_forslag(_udpak_retter(svar), gyldige), tilbud, praef),
-            regler,
-        ),
-        regler.get("maks_gentaget_tilbud"),
-    )
+    retter = _rens(_udpak_retter(await _kald(system, besked, VAERKTOEJ_FORSLAG, 6000)),
+                   tilbud, praef, undgaa)
 
-    # Fik vi for få gyldige retter, beder vi om erstatninger én gang.
-    if len(retter) < config.ANTAL_FORSLAG:
+    for runde in range(FORSOEG_FORSLAG):
+        if len(retter) >= config.ANTAL_FORSLAG:
+            break
         mangler = config.ANTAL_FORSLAG - len(retter)
-        log.warning("Kun %d gyldige forslag, beder om %d mere", len(retter), mangler)
+        mangler_tilbud = max(config.MIN_MED_TILBUD - _med_tilbud(retter), 0)
+        log.warning(
+            "Kun %d forslag (%d med tilbud) — beder om %d mere, runde %d",
+            len(retter), _med_tilbud(retter), mangler, runde + 1,
+        )
+
         brugt: dict[str, int] = {}
         for r in retter:
             for m in _maerkater(r, regler):
@@ -437,29 +485,35 @@ async def foreslaa_retter(tilbud: list[dict], praef: dict) -> list[dict]:
             if n.startswith("maks_") and _heltal(regler[n])
             and brugt.get(n[len("maks_"):], 0) >= regler[n]
         ]
-        ekstra_besked = (
+
+        ekstra = (
             besked
-            + f"\n\nDisse retter er allerede foreslået, lav {mangler} ANDRE:\n"
-            + ", ".join(r["navn"] for r in retter)
+            + "\n\nDisse retter er allerede foreslået, lav {} ANDRE:\n{}".format(
+                mangler, ", ".join(r["navn"] for r in retter)
+            )
             + (
-                "\n\nKategorierne {} er fyldt op — foreslå ikke flere af dem.".format(
+                "\n{} af dem skal bygge på tilbud.".format(mangler_tilbud)
+                if mangler_tilbud else "\nDe må alle være sæsonretter uden tilbud."
+            )
+            + (
+                "\nKategorierne {} er fyldt op — foreslå ikke flere af dem.".format(
                     " og ".join("'{}'".format(k) for k in fyldte)
                 )
                 if fyldte else ""
             )
         )
-        svar2 = await _kald(system, ekstra_besked, VAERKTOEJ_FORSLAG, 4000)
-        retter = _spred_tilbud(
-            _haandhaev_lofter(
-                retter
-                + _fjern_uoenskede(
-                    _valider_forslag(_udpak_retter(svar2), gyldige), tilbud, praef
-                ),
-                regler,
-            ),
-            regler.get("maks_gentaget_tilbud"),
-        )
+        svar = await _kald(system, ekstra, VAERKTOEJ_FORSLAG, 6000)
+        foer = len(retter)
+        retter = _rens(retter + _udpak_retter(svar), tilbud, praef, undgaa)
+        if len(retter) == foer:
+            log.warning("Runden gav ingen brugbare retter — stopper her")
+            break
 
+    if _med_tilbud(retter) < config.MIN_MED_TILBUD:
+        log.warning(
+            "Kun %d af %d retter bygger på tilbud (ville have mindst %d)",
+            _med_tilbud(retter), len(retter), config.MIN_MED_TILBUD,
+        )
     return retter[: config.ANTAL_FORSLAG]
 
 
@@ -491,9 +545,8 @@ def _valider_forslag(retter: list[dict], gyldige_ids: set[str]) -> list[dict]:
         if ukendte:
             log.warning("Kasserer '%s' — ukendte tilbuds-ID'er: %s", ret.get("navn"), ukendte)
             continue
-        if not ids:
-            log.warning("Kasserer '%s' — ingen tilbud brugt", ret.get("navn"))
-            continue
+        # Tom liste er lovligt: det er sådan en sæsonret ser ud. Ukendte
+        # ID'er kasseres stadig — det er den validering der betyder noget.
         ret["tilbuds_ids"] = ids
         ok.append(ret)
     return ok
@@ -523,6 +576,84 @@ def _spred_tilbud(retter: list[dict], maks: int | None) -> list[dict]:
             brugt[i] = brugt.get(i, 0) + 1
         ok.append(ret)
     return ok
+
+
+AARSTIDER = {
+    (3, 4, 5): "forår", (6, 7, 8): "sommer",
+    (9, 10, 11): "efterår", (12, 1, 2): "vinter",
+}
+MAANEDER = (
+    "januar", "februar", "marts", "april", "maj", "juni",
+    "juli", "august", "september", "oktober", "november", "december",
+)
+
+
+def _saeson() -> tuple[str, str]:
+    """(måned, årstid) på dansk ud fra husstandens tidszone."""
+    m = store.nu().month
+    aarstid = next(v for k, v in AARSTIDER.items() if m in k)
+    return MAANEDER[m - 1], aarstid
+
+
+def _normaliser_navn(navn: str) -> str:
+    """Små bogstaver, tegnsætning væk, whitespace samlet."""
+    return " ".join(re.sub(r"[^\w\s]", " ", str(navn).lower()).split())
+
+
+def _fjern_gentagelser(retter: list[dict], tidligere: list[str]) -> list[dict]:
+    """Kasserer retter der ligner noget familien har fået for nylig.
+
+    Navne er fri tekst, så præcis sammenligning fanger ikke 'Kyllingegryde med
+    champignon' mod 'Kyllingegryde med svampe'. Derfor difflib med en grænse i
+    `config.GENTAGELSE_GRAENSE`. Det er en heuristik — hver frasortering logges
+    med lighedstallet, så grænsen kan kalibreres på rigtige data.
+    """
+    if not tidligere:
+        return retter
+    kendte = [(n, _normaliser_navn(n)) for n in tidligere]
+    ok = []
+    for ret in retter:
+        eget = _normaliser_navn(ret.get("navn", ""))
+        traef, lighed = None, 0.0
+        for oprindeligt, normaliseret in kendte:
+            r = difflib.SequenceMatcher(None, eget, normaliseret).ratio()
+            if r > lighed:
+                traef, lighed = oprindeligt, r
+        if lighed >= config.GENTAGELSE_GRAENSE:
+            log.warning(
+                "Kasserer '%s' — ligner '%s' fra de sidste %d uger (%.2f)",
+                ret.get("navn"), traef, config.UNDGAA_UGER, lighed,
+            )
+            continue
+        ok.append(ret)
+    return ok
+
+
+def _maks_uden_tilbud(retter: list[dict], maks: int) -> list[dict]:
+    """Holder gulvet for hvor mange retter der skal bygge på ugens tilbud.
+
+    Udtrykt som et loft fra den anden side: er der plads til 15 forslag og
+    mindst 8 skal bruge tilbud, må højst 7 stå uden. Rækkefølgen bevares.
+    """
+    if maks < 0:
+        return retter
+    uden = 0
+    ok = []
+    for ret in retter:
+        if not (ret.get("tilbuds_ids") or []):
+            if uden >= maks:
+                log.warning(
+                    "Kasserer '%s' — der er allerede %d retter uden tilbud",
+                    ret.get("navn"), maks,
+                )
+                continue
+            uden += 1
+        ok.append(ret)
+    return ok
+
+
+def _med_tilbud(retter: list[dict]) -> int:
+    return sum(1 for r in retter if (r.get("tilbuds_ids") or []))
 
 
 def _fravalgsmoenster(ord_: list) -> "re.Pattern | None":
@@ -637,6 +768,8 @@ async def lav_madplan(valgte: list[dict], tilbud: list[dict], praef: dict) -> di
             )
         elif ret.get("egen"):
             linjer.append("  Familiens eget ønske — der er ingen tilbud knyttet til den.")
+        else:
+            linjer.append("  Sæsonret uden tilbud — brug helt almindelige varer.")
 
     system = (
         "Du skriver opskrifter til en dansk husstand. Skriv klart og kort, som "

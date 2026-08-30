@@ -1,7 +1,7 @@
 # Madplan
 
 Selvstændig Docker-container: henter REMA 1000's ugentlige tilbud, lader Claude
-foreslå ti retter bygget på dem, familien vælger via et website, og der
+foreslå femten retter, familien vælger via et website, og der
 genereres opskrifter plus en delt indkøbsliste.
 
 Ingen Home Assistant, ingen eksterne afhængigheder ud over Anthropic API'et.
@@ -227,7 +227,7 @@ fjernes.
 
 ## AI-designet
 
-**To kald, ikke ét.** Kald 1 foreslår ti retter. Kald 2 skriver opskrifter for
+**To kald, ikke ét.** Kald 1 foreslår femten retter. Kald 2 skriver opskrifter for
 kun de valgte. At generere ti fulde opskrifter og smide fem væk er både dyrere
 og giver dårligere resultat.
 
@@ -237,9 +237,41 @@ pålideligt end at bede om JSON i prosa.
 
 **Validering mod opdigtede tilbud.** Modellen skal returnere `tilbuds_ids` der
 findes i input. `ai._valider_forslag()` kasserer retter med ukendte ID'er, og
-`foreslaa_retter()` beder om erstatninger én gang hvis der bliver for få
-tilbage. Uden det trin foreslår modellen før eller siden kylling til en pris
+`foreslaa_retter()` beder om erstatninger op til `FORSOEG_FORSLAG` gange hvis
+der bliver for få tilbage. To runder, ikke én: med lofterne på 1 og 15 retter
+rækker den første sjældent. Runden fortæller modellen præcist hvor mange der
+mangler, hvor mange af dem der skal bruge tilbud, og hvilke kategorier der er
+fyldte — og afbryder hvis en runde ikke tilføjer noget, så vi ikke betaler for
+et kald der ikke rykker. Uden det trin foreslår modellen før eller siden kylling til en pris
 der ikke eksisterer. **Fjern ikke dette.**
+
+**Forslagene er todelte.** Mindst `MIN_MED_TILBUD` (8) af de
+`ANTAL_FORSLAG` (15) retter skal bygge på ugens tilbud; resten er sæsonretter
+med tom `tilbuds_ids`. Det er ikke dovenskab: med ~93 brugbare tilbud, og efter
+kostregler, fravalg, tilbudsspredning og suppefilter, er der sjældent 15
+fornuftige retter i én uges tilbud. Tvinger man dem igennem, bliver de sidste
+til fyld.
+
+`_valider_forslag()` kræver derfor **ikke længere** mindst ét tilbud pr. ret —
+den linje var hele spærren. Ukendte ID'er kasseres stadig; det er den
+validering der betyder noget. Gulvet håndhæves i stedet som et loft fra den
+anden side af `_maks_uden_tilbud()`: højst `ANTAL_FORSLAG - MIN_MED_TILBUD`
+retter uden tilbud.
+
+Årstiden kommer fra `_saeson()`, der læser måneden af `store.nu()`. Kun måned
+og årstid sendes med — der er bevidst ingen liste over sæsonråvarer at
+vedligeholde.
+
+**Gentagelser fanges i koden.** `_fjern_gentagelser()` kasserer retter hvis
+navn ligner noget fra de sidste `UNDGAA_UGER` (4) uger. Navne er fri tekst, så
+præcis sammenligning fanger ikke "Kyllingegryde med champignon" mod "med
+svampe" — derfor `difflib` med grænsen `GENTAGELSE_GRAENSE` (0,72). Målt på
+rigtige navne: identiske 1,00, omskrivninger 0,77-0,94, en helt anden ret langt
+under. Det er en heuristik, og **hver frasortering logges med lighedstallet**,
+så grænsen kan kalibreres uden at gætte.
+
+Rækkefølgen i `_rens()` er ikke tilfældig: gentagelser fjernes *før* lofterne,
+så en kasseret gentagelse ikke når at optage pladsen i et loft.
 
 **Kun de 140 bedste tilbud når frem til modellen.** `rema.til_prompt_linjer()`
 beskærer til `maks=140`, og listen er sorteret efter rabatprocent, så det er de

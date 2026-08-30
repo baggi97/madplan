@@ -1,7 +1,7 @@
 # Madplan
 
 En selvstændig Docker-container der hver søndag henter REMA 1000's tilbud, får
-Claude til at foreslå ti retter bygget på dem, og lader familien vælge fra hver
+Claude til at foreslå femten retter, og lader familien vælge fra hver
 sin telefon. Når I har valgt, skriver den opskrifter og en samlet indkøbsliste
 I kan krydse af mens I handler.
 
@@ -11,7 +11,7 @@ Ingen Home Assistant, ingen apps. Bare et website på din NAS.
 
 | Tidspunkt | Hvad der sker |
 |---|---|
-| Søndag 08:00 | Henter tilbud og laver 10 forslag |
+| Søndag 08:00 | Henter tilbud og laver 15 forslag — mindst 8 bygget på ugens tilbud, resten sæsonretter |
 | Løbende | Familien åbner websitet, trykker på de retter de vil have, sætter antal personer pr. ret og kan skrive egne ønsker ind |
 | Når nogen trykker **Lav madplanen** | Opskrifter og indkøbsliste bliver skrevet |
 | Søndag 18:00 | Har ingen trykket, tages de fem første forslag automatisk |
@@ -42,7 +42,9 @@ Alt i `.env` bortset fra API-nøglen er valgfrit.
 | `WEB_PORT` | `8099` | Port websitet lytter på |
 | `FORSLAG_CRON` | `sun 8` | Hvornår forslagene hentes |
 | `DEADLINE_CRON` | `sun 18` | Hvornår ugen lukkes automatisk |
-| `ANTAL_FORSLAG` | `10` | Antal retter der foreslås |
+| `ANTAL_FORSLAG` | `15` | Antal retter der foreslås |
+| `MIN_MED_TILBUD` | `8` | Hvor mange af dem der skal bygge på tilbud |
+| `UNDGAA_UGER` | `4` | Retter fra så mange uger tilbage foreslås ikke igen |
 | `ANTAL_RETTER` | `5` | Antal der vælges hvis ingen har stemt |
 | `MAD_AFDELINGER` | `10,20,…` | Hvilke REMA-afdelinger der kigges i |
 
@@ -152,7 +154,7 @@ app/store.py    filbaseret state, én JSON-fil pr. uge
 data/           ugefiler og historik.json
 ```
 
-**Hvorfor to AI-kald?** Det første foreslår ti retter ud fra tilbuddene. Det
+**Hvorfor to AI-kald?** Det første foreslår femten retter. Det
 andet skriver kun opskrifter for dem I faktisk valgte. At generere ti fulde
 opskrifter og smide fem væk er både dyrere og dårligere.
 
