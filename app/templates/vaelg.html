@@ -120,6 +120,17 @@
 </div>
 {% endif %}
 
+{% if uge.forslag and er_denne_uge %}
+<div class="omgoer" {% if arbejder %}hidden{% endif %}>
+  <button class="knap knap-sekundaer" data-handling="hent-forslag" data-gennemtving="1">
+    Hent nye forslag
+  </button>
+  <p class="omgoer-note">
+    Erstatter de ti forslag og rydder jeres valg. Egne retter bliver stående.
+  </p>
+</div>
+{% endif %}
+
 <section class="push" data-push hidden>
   <div class="push-tekst">
     <strong class="push-titel">Få besked når der er nye forslag</strong>
