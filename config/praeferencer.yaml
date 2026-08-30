@@ -38,6 +38,9 @@ kostregler:
   # Højst én dyr ret. Grænsen gælder pr. portion.
   maks_dyre: 1
   dyr_over_kr: 45
+  # Samme tilbud må højst bruges i så mange retter. Uden det bygger modellen
+  # gerne tre aftener på den samme spidskål fordi den er billig.
+  maks_gentaget_tilbud: 2
 
 # Praktiske rammer
 hverdag_maks_minutter: 30

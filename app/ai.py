@@ -388,8 +388,12 @@ async def foreslaa_retter(tilbud: list[dict], praef: dict) -> list[dict]:
         "færre tilbud frem for at tvinge noget sammen.\n"
         "2. Du må KUN referere til ID'er der står i tilbudslisten. Find aldrig "
         "varer eller priser på.\n"
-        "3. Variation: forskellige proteinkilder og køkkener på tværs af de 10 "
-        "forslag. Ikke fem retter med hakket oksekød.\n"
+        "3. Variation på tværs af de 10 forslag — og det gælder ikke kun "
+        "proteinet. Forskellige proteinkilder, forskellige køkkener, og "
+        "forskellige grøntsager og tilbehør. Ikke fem retter med hakket "
+        "oksekød, og ikke spidskål tre aftener på en uge. Brug højst den "
+        "samme grøntsag eller det samme tilbehør i to retter, også selv om "
+        "den er på tilbud.\n"
         "4. Mindst halvdelen skal kunne laves på 30 minutter eller mindre.\n"
         "5. Foreslå ikke noget der ligner retterne på 'undgå'-listen.\n"
         "6. Overhold alt under 'Krav til retterne'. Sæt `kategori` og "
@@ -412,9 +416,12 @@ async def foreslaa_retter(tilbud: list[dict], praef: dict) -> list[dict]:
     )
 
     svar = await _kald(system, besked, VAERKTOEJ_FORSLAG, 4000)
-    retter = _haandhaev_lofter(
-        _fjern_uoenskede(_valider_forslag(_udpak_retter(svar), gyldige), tilbud, praef),
-        regler,
+    retter = _spred_tilbud(
+        _haandhaev_lofter(
+            _fjern_uoenskede(_valider_forslag(_udpak_retter(svar), gyldige), tilbud, praef),
+            regler,
+        ),
+        regler.get("maks_gentaget_tilbud"),
     )
 
     # Fik vi for få gyldige retter, beder vi om erstatninger én gang.
@@ -442,10 +449,15 @@ async def foreslaa_retter(tilbud: list[dict], praef: dict) -> list[dict]:
             )
         )
         svar2 = await _kald(system, ekstra_besked, VAERKTOEJ_FORSLAG, 4000)
-        retter = _haandhaev_lofter(
-            retter
-            + _fjern_uoenskede(_valider_forslag(_udpak_retter(svar2), gyldige), tilbud, praef),
-            regler,
+        retter = _spred_tilbud(
+            _haandhaev_lofter(
+                retter
+                + _fjern_uoenskede(
+                    _valider_forslag(_udpak_retter(svar2), gyldige), tilbud, praef
+                ),
+                regler,
+            ),
+            regler.get("maks_gentaget_tilbud"),
         )
 
     return retter[: config.ANTAL_FORSLAG]
@@ -483,6 +495,32 @@ def _valider_forslag(retter: list[dict], gyldige_ids: set[str]) -> list[dict]:
             log.warning("Kasserer '%s' — ingen tilbud brugt", ret.get("navn"))
             continue
         ret["tilbuds_ids"] = ids
+        ok.append(ret)
+    return ok
+
+
+def _spred_tilbud(retter: list[dict], maks: int | None) -> list[dict]:
+    """Bruger ikke det samme tilbud i for mange retter.
+
+    Er spidskål på tilbud, vil modellen gerne bygge tre aftener på den. Det er
+    billigt, men ensformigt. Prompten beder om spredning; her tælles der efter.
+    Rækkefølgen bevares, så det er de senere retter der ryger.
+    """
+    if not _heltal(maks) or maks < 1:
+        return retter
+    brugt: dict[str, int] = {}
+    ok = []
+    for ret in retter:
+        ids = [i for i in (ret.get("tilbuds_ids") or [])]
+        opbrugt = next((i for i in ids if brugt.get(i, 0) >= maks), None)
+        if opbrugt:
+            log.warning(
+                "Kasserer '%s' — tilbud %s er allerede brugt i %d retter",
+                ret.get("navn"), opbrugt, maks,
+            )
+            continue
+        for i in ids:
+            brugt[i] = brugt.get(i, 0) + 1
         ok.append(ret)
     return ok
 

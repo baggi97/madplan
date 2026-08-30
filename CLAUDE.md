@@ -260,6 +260,12 @@ oversætter de almindelige tilfælde (ugyldig nøgle, tom konto, hastighedsgræn
 til dansk. Brug ikke `raise_for_status()` her — den giver kun
 `Client error '401 Unauthorized' for url ...`, som ingen kan handle på.
 
+**Samme tilbud må ikke bære for mange retter.** `maks_gentaget_tilbud` i
+`kostregler` sætter loftet, og `ai._spred_tilbud()` håndhæver det. Uden det
+bygger modellen gerne tre af ti aftener på den samme spidskål, fordi den er
+billig. Variationsreglen i prompten dækker også grøntsager og tilbehør, ikke
+kun proteinkilder.
+
 **Fravalg håndhæves i koden.** `ai._fjern_uoenskede()` kasserer retter hvor
 `allergier` eller `kan_vi_ikke_lide` optræder i rettens navn, beskrivelse
 eller i navnet på et af de tilbud den bygger på. Prompten beder også om det,
