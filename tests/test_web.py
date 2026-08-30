@@ -140,3 +140,38 @@ def test_service_worker_serveres_fra_roden(klient):
     r = klient.get("/sw.js")
     assert r.status_code == 200
     assert "javascript" in r.headers["content-type"]
+
+
+# --- samtidige skrivninger --------------------------------------------
+
+def test_ingen_skrivninger_tabes(vaelger_uge):
+    """To samtidige ændringer må ikke overskrive hinanden.
+
+    Mutationsfunktionen her har et await midt i læs-ret-skriv. Uden låsen i
+    _opdater skifter event-loopet der, begge coroutiner skriver den uge de
+    læste, og den enes ændring forsvinder. Testen fejler uden låsen.
+    """
+    import asyncio
+
+    async def saet(idx):
+        async def aendring(uge):
+            valgt = set(uge.get("valgt") or [])
+            await asyncio.sleep(0)      # her ville racen opstå
+            valgt.add(idx)
+            uge["valgt"] = sorted(valgt)
+            return {"valgt": uge["valgt"]}
+
+        return await web._opdater(UGE, aendring)
+
+    async def go():
+        await asyncio.gather(*(saet(i) for i in range(3)))
+
+    asyncio.run(go())
+    assert store.hent_uge(UGE)["valgt"] == [0, 1, 2]
+
+
+def test_afvist_aendring_gemmes_ikke(klient, vaelger_uge):
+    """En 400 eller 409 må ikke efterlade en halvt ændret uge på disken."""
+    store.gem_uge({**store.hent_uge(UGE), "status": store.KLAR, "valgt": [1]})
+    assert klient.post(f"/api/uge/{UGE}/vaelg", json={"idx": 0}).status_code == 409
+    assert store.hent_uge(UGE)["valgt"] == [1]

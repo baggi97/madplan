@@ -393,12 +393,23 @@ stadig ordentligt ud.
   `main()` sætter `app.router.lifespan_context` før `uvicorn.run`. Flyt det
   ikke til `web.py` for at gøre det "rigtigt" — så blander web-laget sig med
   planlægningen. Al opstart går gennem `python -m app.main`, også i Docker.
-- **`vaelg` og `kryds` er læs-ret-skriv uden lås.** Begge endpoints læser hele
-  uge-dicten, retter ét felt og skriver alt tilbage. Klikker to familiemedlemmer
-  samtidig fra hver sin telefon, kan den ene skrivning overskrive den anden.
-  Vinduet er millisekunder, så vi har ikke set det i praksis — men det er
-  præcis det scenarie appen er bygget til, så udvid ikke mønstret til flere
-  endpoints uden at tage en lås med.
+- **Alle skrivninger af uge-filen går gennem `web._opdater()`.** Den holder
+  `_skrivelaas` hen over læs-ret-skriv. Skriv aldrig `store.gem_uge()` direkte
+  i et endpoint.
+
+  Bemærk *hvorfor*, for den oprindelige begrundelse her var forkert. Racen var
+  ikke "et vindue på millisekunder": endpointsene er `async def` uden `await`
+  mellem læsning og skrivning, så event-loopet kan slet ikke skifte midt i, og
+  vinduet var **nul**. Det holder kun så længe ingen indsætter et `await` i den
+  blok. Gør nogen det — en push-besked, et opslag, hvad som helst — taber to
+  samtidige klik den enes skrivning, tavst. Målt begge veje; se
+  `test_ingen_skrivninger_tabes`, som fejler hvis låsen fjernes.
+
+  Afviser ændringsfunktionen med en `JSONResponse`, gemmes ugen ikke. Så
+  efterlader en 400 eller 409 ikke en halvt ændret uge på disken.
+
+  `flow._laas` er bevidst en anden lås: den holdes hen over AI-kaldene i op til
+  halvandet minut, og genbrug ville fryse hele websitet imens.
 
 ## Test
 

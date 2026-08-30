@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 from pathlib import Path
 
@@ -40,6 +41,49 @@ def _beriget(uge: dict) -> dict:
         for i, e in enumerate(uge.get("egne") or [])
     ]
     return {**uge, "forslag": forslag, "egne": egne}
+
+
+# Alle skrivninger af uge-filen går gennem én lås.
+#
+# Som koden ser ud i dag er der ingen race: endpointsene er `async def`, men
+# har intet `await` mellem læsning og skrivning, så event-loopet kan ikke
+# skifte midt i. Det er efterprøvet — se test_ingen_skrivninger_tabes.
+#
+# Det holder kun så længe ingen indsætter et `await` i den blok. Gør nogen det
+# — en push-besked, et opslag, hvad som helst — taber to samtidige klik den
+# enes skrivning, tavst. Låsen gør invarianten uafhængig af det, og samler
+# samtidig læs-ret-skriv ét sted i stedet for syv.
+#
+# Bevidst IKKE flow._laas: den holdes hen over AI-kaldene i op til halvandet
+# minut, og så ville hele websitet fryse imens.
+_skrivelaas = asyncio.Lock()
+
+
+async def _opdater(noegle: str, aendring):
+    """Læs uge, lad `aendring` rette i den, skriv tilbage — under lås.
+
+    Returnerer `aendring` en JSONResponse, er ændringen afvist, og ugen
+    gemmes ikke. Ellers sendes returværdien videre til klienten.
+    """
+    async with _skrivelaas:
+        uge = store.hent_uge(noegle)
+        svar = aendring(uge)
+        if inspect.isawaitable(svar):
+            svar = await svar
+        if isinstance(svar, JSONResponse):
+            return svar
+        store.gem_uge(uge)
+        return svar
+
+
+def _afvis(besked: str, kode: int = 400) -> JSONResponse:
+    return JSONResponse({"fejl": besked}, status_code=kode)
+
+
+def _laast(uge: dict) -> JSONResponse | None:
+    if uge["status"] == store.KLAR:
+        return _afvis("Ugens madplan er allerede lavet", 409)
+    return None
 
 
 MIN_PORTIONER, MAKS_PORTIONER = 1, 12
@@ -95,45 +139,44 @@ async def status(noegle: str):
 @app.post("/api/uge/{noegle}/vaelg")
 async def vaelg(noegle: str, krop: dict):
     idx = int(krop.get("idx", -1))
-    uge = store.hent_uge(noegle)
-    if not 0 <= idx < len(uge.get("forslag", [])):
-        return JSONResponse({"fejl": "Ukendt ret"}, status_code=400)
-    if uge["status"] == store.KLAR:
-        return JSONResponse({"fejl": "Ugens madplan er allerede lavet"}, status_code=409)
 
-    valgt = set(uge.get("valgt") or [])
-    valgt.symmetric_difference_update({idx})
-    uge["valgt"] = sorted(valgt)
-    store.gem_uge(uge)
-    return {"valgt": uge["valgt"], "antal": _antal_valgt(uge)}
+    def aendring(uge):
+        if not 0 <= idx < len(uge.get("forslag", [])):
+            return _afvis("Ukendt ret")
+        if afvist := _laast(uge):
+            return afvist
+        valgt = set(uge.get("valgt") or [])
+        valgt.symmetric_difference_update({idx})
+        uge["valgt"] = sorted(valgt)
+        return {"valgt": uge["valgt"], "antal": _antal_valgt(uge)}
+
+    return await _opdater(noegle, aendring)
 
 
 @app.post("/api/uge/{noegle}/portioner")
 async def saet_portioner(noegle: str, krop: dict):
     """Antal personer pr. ret — både på forslag og på familiens egne retter."""
-    uge = store.hent_uge(noegle)
-    if uge["status"] == store.KLAR:
-        return JSONResponse({"fejl": "Ugens madplan er allerede lavet"}, status_code=409)
-
     try:
         idx = int(krop.get("idx", -1))
         antal = int(krop.get("portioner", 0))
     except (TypeError, ValueError):
-        return JSONResponse({"fejl": "Ugyldigt antal"}, status_code=400)
+        return _afvis("Ugyldigt antal")
 
     if not MIN_PORTIONER <= antal <= MAKS_PORTIONER:
-        return JSONResponse(
-            {"fejl": "Vælg mellem {} og {} personer".format(MIN_PORTIONER, MAKS_PORTIONER)},
-            status_code=400,
+        return _afvis(
+            "Vælg mellem {} og {} personer".format(MIN_PORTIONER, MAKS_PORTIONER)
         )
 
-    liste = _egne(uge) if krop.get("slags") == "egen" else uge.get("forslag") or []
-    if not 0 <= idx < len(liste):
-        return JSONResponse({"fejl": "Ukendt ret"}, status_code=400)
+    def aendring(uge):
+        if afvist := _laast(uge):
+            return afvist
+        liste = _egne(uge) if krop.get("slags") == "egen" else uge.get("forslag") or []
+        if not 0 <= idx < len(liste):
+            return _afvis("Ukendt ret")
+        liste[idx]["portioner"] = antal
+        return {"portioner": antal}
 
-    liste[idx]["portioner"] = antal
-    store.gem_uge(uge)
-    return {"portioner": antal}
+    return await _opdater(noegle, aendring)
 
 
 @app.post("/api/uge/{noegle}/egen")
@@ -141,61 +184,67 @@ async def tilfoej_egen(noegle: str, krop: dict):
     """Familiens eget ønske — en titel der følger med til madplanen."""
     navn = str(krop.get("navn", "")).strip()[:MAKS_NAVN]
     if not navn:
-        return JSONResponse({"fejl": "Skriv hvad retten hedder"}, status_code=400)
-
-    uge = store.hent_uge(noegle)
-    if uge["status"] == store.KLAR:
-        return JSONResponse({"fejl": "Ugens madplan er allerede lavet"}, status_code=409)
-
-    egne = _egne(uge)
-    if len(egne) >= MAKS_EGNE:
-        return JSONResponse(
-            {"fejl": "Der er plads til {} egne retter".format(MAKS_EGNE)}, status_code=400
-        )
-    if any(e["navn"].lower() == navn.lower() for e in egne):
-        return JSONResponse({"fejl": "Den ret står der allerede"}, status_code=400)
-
+        return _afvis("Skriv hvad retten hedder")
     standard = config.hent_praeferencer().get("standard_portioner", 4)
-    egne.append({"navn": navn, "portioner": standard, "valgt": True})
-    uge["egne"] = egne
-    store.gem_uge(uge)
-    return {"idx": len(egne) - 1, "navn": navn, "portioner": standard, "antal": _antal_valgt(uge)}
+
+    def aendring(uge):
+        if afvist := _laast(uge):
+            return afvist
+        egne = _egne(uge)
+        if len(egne) >= MAKS_EGNE:
+            return _afvis("Der er plads til {} egne retter".format(MAKS_EGNE))
+        if any(e["navn"].lower() == navn.lower() for e in egne):
+            return _afvis("Den ret står der allerede")
+        egne.append({"navn": navn, "portioner": standard, "valgt": True})
+        uge["egne"] = egne
+        return {
+            "idx": len(egne) - 1,
+            "navn": navn,
+            "portioner": standard,
+            "antal": _antal_valgt(uge),
+        }
+
+    return await _opdater(noegle, aendring)
 
 
 @app.post("/api/uge/{noegle}/egen/vaelg")
 async def vaelg_egen(noegle: str, krop: dict):
-    uge = store.hent_uge(noegle)
-    if uge["status"] == store.KLAR:
-        return JSONResponse({"fejl": "Ugens madplan er allerede lavet"}, status_code=409)
-    egne = _egne(uge)
     idx = int(krop.get("idx", -1))
-    if not 0 <= idx < len(egne):
-        return JSONResponse({"fejl": "Ukendt ret"}, status_code=400)
-    egne[idx]["valgt"] = not egne[idx].get("valgt")
-    store.gem_uge(uge)
-    return {"valgt": egne[idx]["valgt"], "antal": _antal_valgt(uge)}
+
+    def aendring(uge):
+        if afvist := _laast(uge):
+            return afvist
+        egne = _egne(uge)
+        if not 0 <= idx < len(egne):
+            return _afvis("Ukendt ret")
+        egne[idx]["valgt"] = not egne[idx].get("valgt")
+        return {"valgt": egne[idx]["valgt"], "antal": _antal_valgt(uge)}
+
+    return await _opdater(noegle, aendring)
 
 
 @app.post("/api/uge/{noegle}/egen/slet")
 async def slet_egen(noegle: str, krop: dict):
-    uge = store.hent_uge(noegle)
-    if uge["status"] == store.KLAR:
-        return JSONResponse({"fejl": "Ugens madplan er allerede lavet"}, status_code=409)
-    egne = _egne(uge)
     idx = int(krop.get("idx", -1))
-    if not 0 <= idx < len(egne):
-        return JSONResponse({"fejl": "Ukendt ret"}, status_code=400)
-    egne.pop(idx)
-    uge["egne"] = egne
-    store.gem_uge(uge)
-    return {"antal": _antal_valgt(uge)}
+
+    def aendring(uge):
+        if afvist := _laast(uge):
+            return afvist
+        egne = _egne(uge)
+        if not 0 <= idx < len(egne):
+            return _afvis("Ukendt ret")
+        egne.pop(idx)
+        uge["egne"] = egne
+        return {"antal": _antal_valgt(uge)}
+
+    return await _opdater(noegle, aendring)
 
 
 @app.post("/api/uge/{noegle}/lav-madplan")
 async def start_madplan(noegle: str):
     uge = store.hent_uge(noegle)
     if not _antal_valgt(uge):
-        return JSONResponse({"fejl": "Vælg mindst én ret først"}, status_code=400)
+        return _afvis("Vælg mindst én ret først")
     asyncio.create_task(flow.lav_madplan(noegle))
     return {"status": store.ARBEJDER}
 
@@ -211,22 +260,25 @@ async def start_forslag(krop: dict | None = None):
 async def kryds(noegle: str, krop: dict):
     vare = str(krop.get("vare", ""))
     if not vare:
-        return JSONResponse({"fejl": "Mangler vare"}, status_code=400)
-    uge = store.hent_uge(noegle)
-    afkrydset = uge.get("afkrydset") or {}
-    if afkrydset.pop(vare, None) is None:
-        afkrydset[vare] = True
-    uge["afkrydset"] = afkrydset
-    store.gem_uge(uge)
-    return {"afkrydset": vare in afkrydset, "antal": len(afkrydset)}
+        return _afvis("Mangler vare")
+
+    def aendring(uge):
+        afkrydset = uge.get("afkrydset") or {}
+        if afkrydset.pop(vare, None) is None:
+            afkrydset[vare] = True
+        uge["afkrydset"] = afkrydset
+        return {"afkrydset": vare in afkrydset, "antal": len(afkrydset)}
+
+    return await _opdater(noegle, aendring)
 
 
 @app.post("/api/uge/{noegle}/nulstil-kryds")
 async def nulstil_kryds(noegle: str):
-    uge = store.hent_uge(noegle)
-    uge["afkrydset"] = {}
-    store.gem_uge(uge)
-    return {"antal": 0}
+    def aendring(uge):
+        uge["afkrydset"] = {}
+        return {"antal": 0}
+
+    return await _opdater(noegle, aendring)
 
 
 # --- Push -------------------------------------------------------------
