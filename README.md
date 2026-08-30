@@ -85,9 +85,33 @@ noget overhovedet.
 
 **Sæt adgangskontrol foran.** Appen har intet login. Ligger den offentligt,
 kan enhver der kender adressen ændre jeres madplan og trykke på knappen der
-bruger af din API-kvote. Cloudflare Access er gratis op til 50 brugere: Zero
-Trust → Access → Applications → Self-hosted, samme hostname, og en policy der
-kun tillader familiens mailadresser.
+bruger af din API-kvote. Cloudflare Access er gratis op til 50 brugere.
+
+1. Zero Trust → **Integrations → Identity providers → Add new identity
+   provider → One-time PIN**.
+
+   Gør det *først*. Nye Zero Trust-organisationer får kun "Cloudflare" som
+   login-metode, og One-time PIN tilføjes ikke længere automatisk. Uden den
+   skal alle i familien have en Cloudflare-konto. Har I alle Gmail, er Google
+   samme sted et endnu nemmere valg.
+
+2. Access → Applications → **Add an application → Self-hosted**, samme
+   hostname som tunnelen.
+
+   Sæt **session duration** til en måned. Standarden er 24 timer, og så skal
+   familien logge ind hver dag på deres telefoner.
+
+3. Tilføj en policy: Action **Allow**, Include **Emails**, og skriv hver
+   enkelt mailadresse.
+
+Loginsiden skriver *"A code has been emailed to you"* uanset hvad — også hvis
+adressen slet ikke står i policyen. Får nogen aldrig en kode, er det næsten
+altid dét, og ikke en forsvunden mail.
+
+Første gang efter at Access er slået til, skal alle logge ind igen, også dem
+der har siden på hjemmeskærmen. Sig det til familien, ellers tror de at den er
+gået i stykker. Push-beskederne påvirkes ikke: leveringen går fra Apple og
+Googles push-tjenester direkte til telefonen, uden om Cloudflare.
 
 *Alternativ uden Cloudflare:* Synology DDNS giver et gratis
 `noget.synology.me`, og DSM kan hente et Let's Encrypt-certifikat og sætte en
