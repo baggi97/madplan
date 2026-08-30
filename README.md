@@ -56,29 +56,56 @@ fiskeret".
 Antal personer sættes pr. ret i websitet — `standard_portioner` i YAML'en er
 kun startværdien. Så kan en uge tage højde for hvem der er hjemme.
 
+### Adgang udefra med HTTPS
+
+Skal familien kunne åbne madplanen når de ikke er hjemme — og skal
+push-beskeder virke — kræver det HTTPS. Service workers og Push API'et findes
+simpelthen ikke i browseren uden sikker kontekst, så `http://<NAS-IP>:8099` er
+ikke nok.
+
+**Cloudflare Tunnel er den nemmeste og sikreste vej.** `cloudflared` ligger
+allerede i `docker-compose.synology.yml`. Forbindelsen går *udgående* fra
+NAS'en til Cloudflare, så der skal ikke åbnes en eneste port i routeren, og
+DSM bliver aldrig eksponeret direkte mod internettet.
+
+1. Cloudflare Zero Trust → Networks → **Tunnels** → opret en tunnel, vælg
+   **Docker** som miljø
+2. Kopiér tokenet fra kommandoen de viser — den lange streng efter `--token`
+3. Under **Public hostname**: dit subdomæne, type `HTTP`, URL `madplan:8099`
+   (containernavnet, ikke NAS'ens IP — så bliver trafikken på Docker-netværket)
+4. I `.env`:
+
+   ```
+   CLOUDFLARE_TUNNEL_TOKEN=eyJhIjoi...
+   BASE_URL=https://madplan.ditdomæne.dk
+   ```
+
+5. `sudo docker-compose -f docker-compose.synology.yml up -d`
+
+Loggen skal vise `Registered tunnel connection` fire gange. Derefter kan du
+slette `ports:`-linjerne fra `madplan`-servicen, så NAS'en ikke eksponerer
+noget overhovedet.
+
+**Sæt adgangskontrol foran.** Appen har intet login. Ligger den offentligt,
+kan enhver der kender adressen ændre jeres madplan og trykke på knappen der
+bruger af din API-kvote. Cloudflare Access er gratis op til 50 brugere: Zero
+Trust → Access → Applications → Self-hosted, samme hostname, og en policy der
+kun tillader familiens mailadresser.
+
+*Alternativ uden Cloudflare:* Synology DDNS giver et gratis
+`noget.synology.me`, og DSM kan hente et Let's Encrypt-certifikat og sætte en
+omvendt proxy op mod `localhost:8099`. Det kræver til gengæld at port 80 og
+443 åbnes ind til NAS'en.
+
 ### Push-beskeder (valgfrit)
 
 Familien kan få en notifikation på telefonen når ugens forslag er klar, og når
-madplanen er skrevet. Websitet lægges på hjemmeskærmen, og så opfører det sig
-som en app.
+madplanen er skrevet. Kræver HTTPS — se ovenfor.
 
-**Det kræver HTTPS.** Service workers og Push API'et virker kun i sikker
-kontekst. `http://<NAS-IP>:8099` er ikke nok — browseren nægter simpelthen, og
-knappen "Få besked" dukker slet ikke op. På en Synology er den nemmeste vej:
-
-1. Kontrolpanel → Eksterne adgang → **DDNS** → opret et gratis
-   `noget.synology.me`-navn
-2. Kontrolpanel → Sikkerhed → **Certifikat** → hent et Let's Encrypt-certifikat
-   til navnet
-3. Kontrolpanel → Login-portal → **Omvendt proxy** → send
-   `https://noget.synology.me` videre til `localhost:8099`
-
-Sæt derefter `BASE_URL=https://noget.synology.me` i `.env`.
-
-Lav så et nøglepar og læg det i `.env`:
+Lav et nøglepar og læg de tre linjer i `.env`:
 
 ```bash
-docker exec madplan python -m app.push
+sudo docker exec madplan python -m app.push
 ```
 
 Genstart containeren, åbn websitet over HTTPS, og tryk **Slå til** nederst på
@@ -90,7 +117,8 @@ virker det direkte i browseren.
 
 Hver browser tæller som sin egen modtager, så alle i huset kan slå det til på
 hver sin telefon. Siger en telefon nej, eller bliver appen fjernet, rydder
-serveren selv abonnementet væk næste gang der sendes.
+serveren selv abonnementet væk næste gang der sendes. Skifter du VAPID-nøgler,
+skal alle tilmelde sig igen.
 
 ### Telegram (valgfrit)
 

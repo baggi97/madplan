@@ -136,6 +136,11 @@ Tre ting må ikke havne i imaget, og `.dockerignore` holder dem ude:
 `.env` (nøglen), `data/` (ugerne) og `.git`. `data/` og `config/` er volumes,
 så state og præferencer overlever en opdatering.
 
+`cloudflared` i samme compose-fil giver HTTPS udefra uden åbne porte —
+forbindelsen er udgående. Den peger på `madplan:8099` over Docker-netværket,
+ikke på NAS'ens IP. Det er ikke pynt: push virker kun i sikker kontekst.
+Appen har intet login, så noget som Cloudflare Access hører til foran den.
+
 Dockerfilen har et `HEALTHCHECK` mod `/sundhedstjek`. Det bruger stdlib i
 stedet for `curl`, så imaget ikke skal vokse med en pakke mere.
 
