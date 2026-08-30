@@ -53,9 +53,6 @@ def main() -> None:
         log.error("Manglende indstillinger: %s", ", ".join(mangler))
         sys.exit(1)
 
-    if not config.notifikationer_slaaet_til():
-        log.info("Telegram er ikke sat op — kører kun med websitet")
-
     # Scheduleren hører hjemme her, ikke i web.py, så livscyklussen hægtes på
     # appen nu — før uvicorn.run, altså før nogen ASGI-hændelse er sket.
     app.router.lifespan_context = livscyklus

@@ -1,8 +1,7 @@
 """Web Push til familiens telefoner.
 
 Websitet er stedet man vælger og handler — det her sender kun et praj om at
-der er noget nyt, ligesom Telegram-beskeden. Er VAPID-nøglerne tomme, sker
-der ingenting.
+der er noget nyt. Er VAPID-nøglerne tomme, sker der ingenting.
 
 **Kræver HTTPS.** Service workers og Push API'et virker kun i sikker kontekst.
 `http://<NAS-IP>:8099` er ikke nok; browseren nægter at registrere workeren.

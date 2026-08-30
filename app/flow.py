@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from . import ai, config, notify, push, rema, store
+from . import ai, config, push, rema, store
 
 log = logging.getLogger(__name__)
 
@@ -74,9 +74,11 @@ async def hent_forslag(gennemtving: bool = False) -> None:
     store.gem_uge(uge)
     log.info("Klar med %d forslag for %s", len(forslag), noegle)
 
-    besked = "Ugens {} madforslag er klar. Vælg hvad I vil have.".format(len(forslag))
-    await notify.send(besked)
-    await push.send("Nye madforslag", besked, "/uge/{}".format(noegle))
+    await push.send(
+        "Nye madforslag",
+        "Ugens {} madforslag er klar. Vælg hvad I vil have.".format(len(forslag)),
+        "/uge/{}".format(noegle),
+    )
 
 
 async def lav_madplan(noegle: str | None = None) -> None:
@@ -119,11 +121,13 @@ async def lav_madplan(noegle: str | None = None) -> None:
     antal = sum(len(g.get("varer", [])) for g in madplan.get("indkoebsliste", []))
     log.info("Madplan klar for %s: %d retter, %d varer", noegle, len(valgte), antal)
 
-    besked = "Madplanen for uge {} er klar: {} retter og {} varer på indkøbslisten.".format(
-        store.uge_nummer(noegle), len(valgte), antal
+    await push.send(
+        "Madplanen er klar",
+        "Madplanen for uge {} er klar: {} retter og {} varer på indkøbslisten.".format(
+            store.uge_nummer(noegle), len(valgte), antal
+        ),
+        "/uge/{}".format(noegle),
     )
-    await notify.send(besked)
-    await push.send("Madplanen er klar", besked, "/uge/{}".format(noegle))
 
 
 async def deadline() -> None:

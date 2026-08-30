@@ -14,8 +14,6 @@ TZ = os.getenv("TZ", "Europe/Copenhagen")
 
 # --- Web --------------------------------------------------------------
 WEB_PORT = int(os.getenv("WEB_PORT", "8099"))
-# Adressen familien åbner. Bruges i notifikationer.
-BASE_URL = os.getenv("BASE_URL", "").rstrip("/")
 
 # --- Tilbudskilde -----------------------------------------------------
 # Det katalog-API som REMA-appen selv bruger. Kræver ingen nøgle.
@@ -37,11 +35,6 @@ MAD_AFDELINGER = {
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
-
-# --- Telegram (valgfrit) ----------------------------------------------
-# Sender kun en besked med et link til websitet. Lad stå tomt for at slå fra.
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 # --- Push-beskeder (valgfrit) -----------------------------------------
 # Lav et nøglepar med:  python -m app.push
@@ -67,10 +60,6 @@ def hent_praeferencer() -> dict:
     if not sti.exists():
         return {}
     return yaml.safe_load(sti.read_text(encoding="utf-8")) or {}
-
-
-def notifikationer_slaaet_til() -> bool:
-    return bool(TELEGRAM_TOKEN and TELEGRAM_CHAT_ID)
 
 
 def valider() -> list[str]:

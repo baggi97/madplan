@@ -35,7 +35,6 @@ app/ai.py       to Claude-kald + validering
 app/flow.py     ugens forløb, orkestrering
 app/web.py      FastAPI: sider + JSON-endpoints
 app/store.py    filbaseret state, én JSON-fil pr. uge
-app/notify.py   valgfri Telegram-besked
 app/push.py     valgfri Web Push til telefonerne
 app/main.py     uvicorn + APScheduler i samme proces
 app/config.py   miljøvariabler + indlæsning af praeferencer.yaml
@@ -146,9 +145,10 @@ stedet for `curl`, så imaget ikke skal vokse med en pakke mere.
 
 ### Push-beskeder
 
-To uafhængige kanaler siger til når noget er klar: `notify.send()` (Telegram)
-og `push.send()` (Web Push). Begge er valgfri og gør ingenting hvis deres
-nøgler er tomme. `flow.py` kalder dem side om side.
+`push.send()` siger til når forslagene er klar, og når madplanen er skrevet.
+Den er valgfri og gør ingenting hvis VAPID-nøglerne er tomme. Der var
+tidligere også en Telegram-kanal; den er fjernet, fordi push dækker behovet
+uden at kræve en konto.
 
 **Push kræver HTTPS.** Service workers og Push API'et findes ikke i browseren
 uden for sikker kontekst. På `http://<NAS-IP>:8099` er `navigator.serviceWorker`

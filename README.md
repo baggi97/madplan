@@ -45,8 +45,6 @@ Alt i `.env` bortset fra API-nøglen er valgfrit.
 | `ANTAL_FORSLAG` | `10` | Antal retter der foreslås |
 | `ANTAL_RETTER` | `5` | Antal der vælges hvis ingen har stemt |
 | `MAD_AFDELINGER` | `10,20,…` | Hvilke REMA-afdelinger der kigges i |
-| `BASE_URL` | — | Adressen der linkes til i Telegram-beskeden |
-| `TELEGRAM_TOKEN` | tom | Valgfri notifikation. Tom = slået fra |
 
 `config/praeferencer.yaml` er det vigtigste at rette. Det er her forslagene går
 fra generiske til jeres: allergier, hvad I ikke gider, hvor lang tid I har på
@@ -77,7 +75,6 @@ DSM bliver aldrig eksponeret direkte mod internettet.
 
    ```
    CLOUDFLARE_TUNNEL_TOKEN=eyJhIjoi...
-   BASE_URL=https://madplan.ditdomæne.dk
    ```
 
 5. `sudo docker-compose -f docker-compose.synology.yml up -d`
@@ -120,18 +117,6 @@ hver sin telefon. Siger en telefon nej, eller bliver appen fjernet, rydder
 serveren selv abonnementet væk næste gang der sendes. Skifter du VAPID-nøgler,
 skal alle tilmelde sig igen.
 
-### Telegram (valgfrit)
-
-Uden det virker alt — I skal bare selv huske at åbne websitet om søndagen.
-Med det får I et praj med et link når forslagene er klar.
-
-Skriv til [@BotFather](https://t.me/BotFather), send `/newbot`, gem tokenet.
-Opret en gruppe, tilføj botten, send en besked, og hent chat-ID'et:
-
-```bash
-curl https://api.telegram.org/bot<DIT_TOKEN>/getUpdates
-```
-
 ## Sådan hænger det sammen
 
 ```
@@ -140,7 +125,6 @@ app/ai.py       de to Claude-kald + validering mod opdigtede tilbud
 app/flow.py     ugens forløb
 app/web.py      websitet og JSON-endpoints
 app/store.py    filbaseret state, én JSON-fil pr. uge
-app/notify.py   valgfri Telegram-besked
 data/           ugefiler og historik.json
 ```
 
