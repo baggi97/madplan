@@ -47,6 +47,9 @@ VAPID_KONTAKT = os.getenv("VAPID_KONTAKT", "mailto:madplan@eksempel.dk")
 # --- Tidsplan ("ugedag time", lokal tid) ------------------------------
 FORSLAG_CRON = os.getenv("FORSLAG_CRON", "sun 8")
 DEADLINE_CRON = os.getenv("DEADLINE_CRON", "sun 18")
+# Puf til familien hvis ingen har valgt endnu. Skal ligge før deadline, så der
+# er tid til at nå det.
+PAAMINDELSE_CRON = os.getenv("PAAMINDELSE_CRON", "sun 17")
 
 ANTAL_FORSLAG = int(os.getenv("ANTAL_FORSLAG", "15"))
 ANTAL_RETTER = int(os.getenv("ANTAL_RETTER", "5"))  # fallback hvis ingen stemmer

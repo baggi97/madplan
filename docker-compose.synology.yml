@@ -29,6 +29,7 @@ services:
       TZ: ${TZ:-Europe/Copenhagen}
       FORSLAG_CRON: ${FORSLAG_CRON:-sun 8}
       DEADLINE_CRON: ${DEADLINE_CRON:-sun 18}
+      PAAMINDELSE_CRON: ${PAAMINDELSE_CRON:-sun 17}
       ANTAL_FORSLAG: ${ANTAL_FORSLAG:-15}
       ANTAL_RETTER: ${ANTAL_RETTER:-5}
       MIN_MED_TILBUD: ${MIN_MED_TILBUD:-8}

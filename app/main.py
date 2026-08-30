@@ -31,6 +31,7 @@ async def livscyklus(_app):
     """Starter scheduleren når serveren er oppe, og lukker den ned igen."""
     scheduler = AsyncIOScheduler(timezone=config.TZ)
     scheduler.add_job(flow.hent_forslag, _cron(config.FORSLAG_CRON), id="forslag")
+    scheduler.add_job(flow.paamindelse, _cron(config.PAAMINDELSE_CRON), id="paamindelse")
     scheduler.add_job(flow.deadline, _cron(config.DEADLINE_CRON), id="deadline")
     scheduler.start()
     for job in scheduler.get_jobs():

@@ -145,7 +145,19 @@ stedet for `curl`, så imaget ikke skal vokse med en pakke mere.
 
 ### Push-beskeder
 
-`push.send()` siger til når forslagene er klar, og når madplanen er skrevet.
+`push.send()` siger til når forslagene er klar, når madplanen er skrevet, og
+**når noget går galt**. `flow._fejl()` sender fejlbeskeden videre til
+telefonerne — uden det ville en fejlet søndagskørsel stå og vente på at nogen
+tilfældigt åbnede websitet, og hele pointen med den automatiske kørsel er at
+ingen skal holde øje.
+
+Derfor er `_fejl()` async, og derfor ligger kaldet i `lav_madplan()` **uden for**
+`_laas`: et netværkskald må ikke holde AI-låsen i op til tyve sekunder.
+
+`flow.paamindelse()` kører kl. 17 (`PAAMINDELSE_CRON`) og puffer til familien
+hvis ingen har valgt endnu. Har nogen valgt — også hvis det bare er en egen ret
+— siger den ingenting; en påmindelse man ikke skal handle på er støj.
+
 Den er valgfri og gør ingenting hvis VAPID-nøglerne er tomme. Der var
 tidligere også en Telegram-kanal; den er fjernet, fordi push dækker behovet
 uden at kræve en konto.

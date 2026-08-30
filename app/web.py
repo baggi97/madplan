@@ -96,7 +96,7 @@ def _egne(uge: dict) -> list:
 
 
 def _antal_valgt(uge: dict) -> int:
-    return len(uge.get("valgt") or []) + sum(1 for e in _egne(uge) if e.get("valgt"))
+    return store.antal_valgt(uge)
 
 
 @app.get("/")

@@ -14,6 +14,7 @@ Ingen Home Assistant, ingen apps. Bare et website på din NAS.
 | Søndag 08:00 | Henter tilbud og laver 15 forslag — mindst 8 bygget på ugens tilbud, resten sæsonretter |
 | Løbende | Familien åbner websitet, trykker på de retter de vil have, sætter antal personer pr. ret og kan skrive egne ønsker ind |
 | Når nogen trykker **Lav madplanen** | Opskrifter og indkøbsliste bliver skrevet |
+| Søndag 17:00 | Har ingen valgt endnu, kommer der et puf på telefonen |
 | Søndag 18:00 | Har ingen trykket, tages de fem første forslag automatisk |
 
 ## Kom i gang
@@ -42,6 +43,7 @@ Alt i `.env` bortset fra API-nøglen er valgfrit.
 | `WEB_PORT` | `8099` | Port websitet lytter på |
 | `FORSLAG_CRON` | `sun 8` | Hvornår forslagene hentes |
 | `DEADLINE_CRON` | `sun 18` | Hvornår ugen lukkes automatisk |
+| `PAAMINDELSE_CRON` | `sun 17` | Hvornår der puffes hvis ingen har valgt |
 | `ANTAL_FORSLAG` | `15` | Antal retter der foreslås |
 | `MIN_MED_TILBUD` | `8` | Hvor mange af dem der skal bygge på tilbud |
 | `UNDGAA_UGER` | `4` | Retter fra så mange uger tilbage foreslås ikke igen |

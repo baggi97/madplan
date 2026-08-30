@@ -84,6 +84,17 @@ def gem_uge(uge: dict) -> None:
     _skriv("uge-{}.json".format(uge["uge"]), uge)
 
 
+def antal_valgt(uge: dict) -> int:
+    """Valgte forslag plus familiens egne retter.
+
+    Ligger her og ikke i web.py, fordi flow.paamindelse() også skal bruge den
+    og web importerer flow — ikke omvendt.
+    """
+    return len(uge.get("valgt") or []) + sum(
+        1 for e in (uge.get("egne") or []) if e.get("valgt")
+    )
+
+
 def alle_uger() -> list[str]:
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     noegler = [
