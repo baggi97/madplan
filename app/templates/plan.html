@@ -9,7 +9,11 @@
 <div class="hoved">
   <p class="oejenbryn">Uge {{ ugenr }}</p>
   <h1>Madplanen er klar</h1>
-  <p class="under">{{ plan.opskrifter|length }} retter · {{ antal_varer }} varer at købe</p>
+  <p class="under">
+    {{ plan.opskrifter|length }} retter · {{ antal_varer }} varer at købe{% if totaler.pris %} ·
+    ca. {{ totaler.pris }} kr.{% endif %}{% if totaler.spar %}
+    <span class="spar-note">Tilbuddene sparer {{ totaler.spar }} kr.</span>{% endif %}
+  </p>
 </div>
 
 <div class="faner" role="tablist">
@@ -53,7 +57,10 @@
   <article class="opskrift">
     <header class="opskrift-top">
       <h2>{{ opskrift.navn }}</h2>
-      <p class="opskrift-meta">{{ opskrift.portioner }} portioner · {{ opskrift.tid_min }} min</p>
+      <p class="opskrift-meta">
+        {% if opskrift.dag %}<span class="dag-maerkat">{{ opskrift.dag|capitalize }}</span>{% endif %}
+        {{ opskrift.portioner }} portioner · {{ opskrift.tid_min }} min
+      </p>
     </header>
 
     <h3 class="delnavn">Ingredienser</h3>

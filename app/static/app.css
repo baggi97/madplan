@@ -701,3 +701,39 @@ li { list-style: none; }
 }
 
 .push .knap { flex: none; border: 1.5px solid var(--blaek); }
+
+/* --- ugedag pr. ret --------------------------------------------------- */
+
+.dag-vaelger {
+  margin-left: auto;
+  padding: 5px 8px;
+  border: 1.5px solid var(--linje);
+  border-radius: 8px;
+  background: var(--kort);
+  font: inherit;
+  font-size: .82rem;
+  color: var(--blaek-mild);
+  cursor: pointer;
+}
+
+.dag-vaelger:hover { border-color: var(--blaek-mild); }
+.dag-vaelger:focus-visible { outline: 3px solid var(--gul); outline-offset: 2px; }
+
+/* Egne retter har også en fjern-knap; så skal vælgeren ikke skubbe helt ud */
+.egne-liste .dag-vaelger { margin-left: auto; }
+.egne-liste .slet-knap { margin-left: 10px; }
+
+.dag-maerkat {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: var(--blaek);
+  color: #fff;
+  font-size: .74rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+
+.taeller-pris { color: var(--blaek-mild); }
+.spar-note { display: block; margin-top: 3px; color: var(--roed); font-weight: 600; }

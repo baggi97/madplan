@@ -24,12 +24,20 @@ function varsel(tekst) {
   setTimeout(() => boks.remove(), 3200);
 }
 
-function opdaterTaeller(antal) {
+function opdaterTaeller(data) {
+  const antal = typeof data === "number" ? data : data.antal;
   const taeller = document.querySelector("[data-taeller]");
-  if (!taeller) return;
-  taeller.textContent = antal;
+  if (taeller) taeller.textContent = antal;
   const knap = document.querySelector('[data-handling="lav-madplan"]');
   if (knap) knap.disabled = antal === 0;
+
+  /* Prisen er modellens skøn, ikke en beregning ud fra tilbudspriserne —
+     derfor "ca." i skabelonen. */
+  const boks = document.querySelector("[data-pris-boks]");
+  if (boks && typeof data === "object" && data.pris !== undefined) {
+    boks.querySelector("[data-pris]").textContent = data.pris;
+    boks.hidden = antal === 0;
+  }
 }
 
 /* --- Vælg retter --------------------------------------------------- */
@@ -44,7 +52,7 @@ function bindVaelg(knap, sti, krop) {
     knap.setAttribute("aria-pressed", String(!var_valgt));
 
     try {
-      opdaterTaeller((await send(sti, krop())).antal);
+      opdaterTaeller(await send(sti, krop()));
     } catch (e) {
       kort.classList.toggle("er-valgt");
       knap.setAttribute("aria-pressed", String(var_valgt));
@@ -88,14 +96,35 @@ document.querySelectorAll("[data-portioner]").forEach((knap) => {
     opdaterTalKnapper(raekke);
 
     try {
-      await send(`/api/uge/${UGE}/portioner`, {
-        slags: knap.dataset.slags,
-        idx: Number(knap.dataset.idx),
-        portioner: efter,
-      });
+      opdaterTaeller(
+        await send(`/api/uge/${UGE}/portioner`, {
+          slags: knap.dataset.slags,
+          idx: Number(knap.dataset.idx),
+          portioner: efter,
+        })
+      );
     } catch (e) {
       felt.textContent = foer;
       opdaterTalKnapper(raekke);
+      varsel(e.message);
+    }
+  });
+});
+
+/* --- Ugedag pr. ret -------------------------------------------------- */
+
+document.querySelectorAll("[data-dag]").forEach((vaelger) => {
+  let foer = vaelger.value;
+  vaelger.addEventListener("change", async () => {
+    try {
+      await send(`/api/uge/${UGE}/dag`, {
+        slags: vaelger.dataset.slags,
+        idx: Number(vaelger.dataset.idx),
+        dag: vaelger.value,
+      });
+      foer = vaelger.value;
+    } catch (e) {
+      vaelger.value = foer;
       varsel(e.message);
     }
   });

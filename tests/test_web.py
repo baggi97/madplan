@@ -73,7 +73,7 @@ def test_portioner_gemmes(klient, vaelger_uge):
 
 def test_egen_ret_tilfoejes_og_taelles_med(klient, vaelger_uge):
     r = klient.post(f"/api/uge/{UGE}/egen", json={"navn": "Tarteletter"})
-    assert r.json() == {"idx": 0, "navn": "Tarteletter", "portioner": 4, "antal": 1}
+    assert {"idx": 0, "navn": "Tarteletter", "portioner": 4, "antal": 1}.items() <= r.json().items()
     # Egne retter tæller med i "antal valgt" — brug _antal_valgt, ikke len(valgt)
     assert web._antal_valgt(store.hent_uge(UGE)) == 1
 
@@ -175,3 +175,116 @@ def test_afvist_aendring_gemmes_ikke(klient, vaelger_uge):
     store.gem_uge({**store.hent_uge(UGE), "status": store.KLAR, "valgt": [1]})
     assert klient.post(f"/api/uge/{UGE}/vaelg", json={"idx": 0}).status_code == 409
     assert store.hent_uge(UGE)["valgt"] == [1]
+
+
+# --- ugedag -----------------------------------------------------------
+
+def test_dag_saettes_og_gemmes(klient, vaelger_uge):
+    r = klient.post(f"/api/uge/{UGE}/dag", json={"slags": "forslag", "idx": 0, "dag": "torsdag"})
+    assert r.json()["dag"] == "torsdag"
+    assert store.hent_uge(UGE)["forslag"][0]["dag"] == "torsdag"
+
+
+def test_dag_kan_ryddes(klient, vaelger_uge):
+    klient.post(f"/api/uge/{UGE}/dag", json={"slags": "forslag", "idx": 0, "dag": "torsdag"})
+    klient.post(f"/api/uge/{UGE}/dag", json={"slags": "forslag", "idx": 0, "dag": ""})
+    assert store.hent_uge(UGE)["forslag"][0]["dag"] == ""
+
+
+@pytest.mark.parametrize("dag", ["mandagx", "monday", "17"])
+def test_ukendt_dag_afvises(klient, vaelger_uge, dag):
+    r = klient.post(f"/api/uge/{UGE}/dag", json={"slags": "forslag", "idx": 0, "dag": dag})
+    assert r.status_code == 400
+    assert "dag" not in store.hent_uge(UGE)["forslag"][0]
+
+
+def test_dag_paa_egen_ret(klient, vaelger_uge):
+    klient.post(f"/api/uge/{UGE}/egen", json={"navn": "Tarteletter"})
+    klient.post(f"/api/uge/{UGE}/dag", json={"slags": "egen", "idx": 0, "dag": "fredag"})
+    assert store.hent_uge(UGE)["egne"][0]["dag"] == "fredag"
+
+
+def test_opskrifter_sorteres_efter_dag():
+    """Opskrifterne kommer fra kald 2 og kender ikke dagen — den kobles på navnet."""
+    uge = store.tom_uge(UGE)
+    uge.update({
+        "status": store.KLAR,
+        "forslag": [ret("Fisk", dag="fredag"), ret("Suppe", dag="mandag"), ret("Steg")],
+        "valgt": [0, 1, 2],
+        "madplan": {"opskrifter": [{"navn": "Fisk"}, {"navn": "Suppe"}, {"navn": "Steg"}],
+                    "indkoebsliste": []},
+    })
+    ud = web._beriget(uge)["madplan"]["opskrifter"]
+    # mandag før fredag, og den uden dag sidst
+    assert [o["navn"] for o in ud] == ["Suppe", "Fisk", "Steg"]
+    assert ud[2]["dag"] == ""
+
+
+def test_ukendt_opskriftsnavn_forsvinder_ikke():
+    uge = store.tom_uge(UGE)
+    uge.update({
+        "status": store.KLAR,
+        "forslag": [ret("Fisk", dag="fredag")],
+        "valgt": [0],
+        "madplan": {"opskrifter": [{"navn": "Noget helt andet"}], "indkoebsliste": []},
+    })
+    ud = web._beriget(uge)["madplan"]["opskrifter"]
+    assert len(ud) == 1 and ud[0]["dag"] == ""
+
+
+# --- ugens pris -------------------------------------------------------
+
+def test_totaler_regner_pris_og_besparelse(vaelger_uge):
+    uge = store.hent_uge(UGE)
+    uge["forslag"][0].update({"pris_pr_portion": 30, "portioner": 4, "tilbuds_ids": ["1"]})
+    uge["forslag"][1].update({"pris_pr_portion": 20, "portioner": 2, "tilbuds_ids": []})
+    uge["valgt"] = [0, 1]
+    store.gem_uge(uge)
+    t = web._totaler(store.hent_uge(UGE))
+    assert t["antal"] == 2
+    assert t["pris"] == 30 * 4 + 20 * 2        # 160
+    assert t["spar"] == 10                     # 35 - 25 på tilbud "1"
+
+
+def test_totaler_tomme_naar_intet_er_valgt(vaelger_uge):
+    assert web._totaler(store.hent_uge(UGE)) == {"antal": 0, "pris": 0, "spar": 0}
+
+
+def test_egne_retter_taeller_med_i_prisen(klient, vaelger_uge):
+    klient.post(f"/api/uge/{UGE}/egen", json={"navn": "Tarteletter"})
+    uge = store.hent_uge(UGE)
+    uge["egne"][0]["pris_pr_portion"] = 25
+    store.gem_uge(uge)
+    assert web._totaler(store.hent_uge(UGE))["pris"] == 100     # 25 × 4 portioner
+
+
+def test_vaelg_returnerer_totaler(klient, vaelger_uge):
+    svar = klient.post(f"/api/uge/{UGE}/vaelg", json={"idx": 0}).json()
+    assert {"antal", "pris", "spar"} <= set(svar)
+
+
+def test_plan_siden_viser_pris_og_dage(klient):
+    """Hele vejen fra state til renderet HTML."""
+    uge = store.tom_uge(UGE)
+    uge.update({
+        "status": store.KLAR,
+        "tilbud": [{"id": "1", "navn": "Kød", "pris": 25.0, "normalpris": 35.0, "rabat_pct": 29}],
+        "forslag": [ret("Fisk", ids=["1"], dag="fredag", portioner=4, pris=30),
+                    ret("Suppe", dag="mandag", portioner=2, pris=20)],
+        "valgt": [0, 1],
+        "madplan": {
+            "opskrifter": [
+                {"navn": "Fisk", "portioner": 4, "tid_min": 20,
+                 "ingredienser": ["a"], "fremgangsmaade": ["b"]},
+                {"navn": "Suppe", "portioner": 2, "tid_min": 15,
+                 "ingredienser": ["c"], "fremgangsmaade": ["d"]},
+            ],
+            "indkoebsliste": [{"afdeling": "Køl", "varer": [{"vare": "Kød", "paa_tilbud": True}]}],
+        },
+    })
+    store.gem_uge(uge)
+    html = klient.get(f"/uge/{UGE}").text
+    assert "ca. 160 kr." in html            # 30×4 + 20×2
+    assert "Tilbuddene sparer 10 kr." in html
+    assert "Mandag" in html and "Fredag" in html
+    assert html.index("Suppe") < html.index("Fisk")   # mandag før fredag

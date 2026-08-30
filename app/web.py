@@ -20,6 +20,8 @@ app = FastAPI(title="Madplan", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=HER / "static"), name="static")
 skabeloner = Jinja2Templates(directory=str(HER / "templates"))
 
+DAGE = ("mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "søndag")
+
 
 def _beriget(uge: dict) -> dict:
     """Slår tilbuds-ID'er op, så skabelonerne kan vise varenavne og rabatter."""
@@ -37,10 +39,33 @@ def _beriget(uge: dict) -> dict:
             }
         )
     egne = [
-        {**e, "idx": i, "portioner": e.get("portioner") or 4}
+        {**e, "idx": i, "portioner": e.get("portioner") or 4, "dag": e.get("dag", "")}
         for i, e in enumerate(uge.get("egne") or [])
     ]
-    return {**uge, "forslag": forslag, "egne": egne}
+    return {**uge, "forslag": forslag, "egne": egne, "madplan": _med_dage(uge)}
+
+
+def _med_dage(uge: dict) -> dict:
+    """Hænger den valgte ugedag på hver opskrift og sorterer efter den.
+
+    Opskrifterne kommer fra kald 2 og kender ikke dagen — den er valgt i
+    websitet. Vi kobler på navnet, som modellen bliver bedt om at genbruge.
+    Matcher et navn ikke, ryger retten bagerst uden dag frem for at forsvinde.
+    """
+    madplan = uge.get("madplan") or {}
+    opskrifter = madplan.get("opskrifter")
+    if not opskrifter:
+        return madplan
+
+    dag_for = {
+        r["navn"]: r.get("dag", "")
+        for r in (uge.get("forslag") or []) + (uge.get("egne") or [])
+        if r.get("navn")
+    }
+    beriget = [{**o, "dag": dag_for.get(o.get("navn"), "")} for o in opskrifter]
+    # Uden dag sidst; ellers ugens rækkefølge
+    beriget.sort(key=lambda o: DAGE.index(o["dag"]) if o["dag"] in DAGE else len(DAGE))
+    return {**madplan, "opskrifter": beriget}
 
 
 # Alle skrivninger af uge-filen går gennem én lås.
@@ -86,6 +111,33 @@ def _laast(uge: dict) -> JSONResponse | None:
     return None
 
 
+def _spar(ret: dict, efter_id: dict) -> int:
+    varer = [efter_id[x] for x in (ret.get("tilbuds_ids") or []) if x in efter_id]
+    return round(sum(v["normalpris"] - v["pris"] for v in varer))
+
+
+def _totaler(uge: dict) -> dict:
+    """Antal valgte, anslået pris for ugen, og hvad tilbuddene sparer.
+
+    Prisen er **et skøn**: `pris_pr_portion` er modellens vurdering, ikke en
+    beregning ud fra tilbudspriserne. Samme forbehold som `dyre`-mærkatet.
+    Besparelsen er derimod rigtige tal fra REMA.
+    """
+    efter_id = {t["id"]: t for t in uge.get("tilbud", [])}
+    valgte = [
+        r for i, r in enumerate(uge.get("forslag") or []) if i in (uge.get("valgt") or [])
+    ] + [e for e in (uge.get("egne") or []) if e.get("valgt")]
+
+    pris = sum(
+        float(r.get("pris_pr_portion") or 0) * int(r.get("portioner") or 0) for r in valgte
+    )
+    return {
+        "antal": len(valgte),
+        "pris": round(pris),
+        "spar": sum(_spar(r, efter_id) for r in valgte),
+    }
+
+
 MIN_PORTIONER, MAKS_PORTIONER = 1, 12
 MAKS_EGNE = 10
 MAKS_NAVN = 80
@@ -124,6 +176,8 @@ async def uge_side(request: Request, noegle: str):
             "ugenr": store.uge_nummer(noegle),
             "er_denne_uge": er_denne_uge,
             "antal_valgt": _antal_valgt(uge),
+            "dage": DAGE,
+            "totaler": _totaler(uge),
             "arbejder": uge["status"] == store.ARBEJDER,
             "alle_uger": store.alle_uger(),
         },
@@ -148,7 +202,7 @@ async def vaelg(noegle: str, krop: dict):
         valgt = set(uge.get("valgt") or [])
         valgt.symmetric_difference_update({idx})
         uge["valgt"] = sorted(valgt)
-        return {"valgt": uge["valgt"], "antal": _antal_valgt(uge)}
+        return {"valgt": uge["valgt"], **_totaler(uge)}
 
     return await _opdater(noegle, aendring)
 
@@ -174,7 +228,30 @@ async def saet_portioner(noegle: str, krop: dict):
         if not 0 <= idx < len(liste):
             return _afvis("Ukendt ret")
         liste[idx]["portioner"] = antal
-        return {"portioner": antal}
+        return {"portioner": antal, **_totaler(uge)}
+
+    return await _opdater(noegle, aendring)
+
+
+@app.post("/api/uge/{noegle}/dag")
+async def saet_dag(noegle: str, krop: dict):
+    """Hvilken aften retten ligger på. Tom streng betyder ingen dag valgt."""
+    dag = str(krop.get("dag", "")).strip().lower()
+    if dag and dag not in DAGE:
+        return _afvis("Ukendt ugedag")
+    try:
+        idx = int(krop.get("idx", -1))
+    except (TypeError, ValueError):
+        return _afvis("Ukendt ret")
+
+    def aendring(uge):
+        if afvist := _laast(uge):
+            return afvist
+        liste = _egne(uge) if krop.get("slags") == "egen" else uge.get("forslag") or []
+        if not 0 <= idx < len(liste):
+            return _afvis("Ukendt ret")
+        liste[idx]["dag"] = dag
+        return {"dag": dag}
 
     return await _opdater(noegle, aendring)
 
@@ -201,7 +278,7 @@ async def tilfoej_egen(noegle: str, krop: dict):
             "idx": len(egne) - 1,
             "navn": navn,
             "portioner": standard,
-            "antal": _antal_valgt(uge),
+            **_totaler(uge),
         }
 
     return await _opdater(noegle, aendring)
@@ -218,7 +295,7 @@ async def vaelg_egen(noegle: str, krop: dict):
         if not 0 <= idx < len(egne):
             return _afvis("Ukendt ret")
         egne[idx]["valgt"] = not egne[idx].get("valgt")
-        return {"valgt": egne[idx]["valgt"], "antal": _antal_valgt(uge)}
+        return {"valgt": egne[idx]["valgt"], **_totaler(uge)}
 
     return await _opdater(noegle, aendring)
 
@@ -235,7 +312,7 @@ async def slet_egen(noegle: str, krop: dict):
             return _afvis("Ukendt ret")
         egne.pop(idx)
         uge["egne"] = egne
-        return {"antal": _antal_valgt(uge)}
+        return _totaler(uge)
 
     return await _opdater(noegle, aendring)
 

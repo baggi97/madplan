@@ -69,6 +69,13 @@
                 aria-label="Flere personer til {{ ret.navn }}">+</button>
       </div>
       <span class="portioner-tekst">personer</span>
+      <select class="dag-vaelger" data-dag data-slags="forslag" data-idx="{{ ret.idx }}"
+              aria-label="Ugedag for {{ ret.navn }}">
+        <option value="">Ingen dag</option>
+        {% for d in dage %}
+        <option value="{{ d }}" {% if ret.dag == d %}selected{% endif %}>{{ d|capitalize }}</option>
+        {% endfor %}
+      </select>
     </div>
   </li>
   {% endfor %}
@@ -100,6 +107,13 @@
                   aria-label="Flere personer til {{ e.navn }}">+</button>
         </div>
         <span class="portioner-tekst">personer</span>
+        <select class="dag-vaelger" data-dag data-slags="egen" data-idx="{{ e.idx }}"
+                aria-label="Ugedag for {{ e.navn }}">
+          <option value="">Ingen dag</option>
+          {% for d in dage %}
+          <option value="{{ d }}" {% if e.dag == d %}selected{% endif %}>{{ d|capitalize }}</option>
+          {% endfor %}
+        </select>
         <button class="slet-knap" data-slet-egen="{{ e.idx }}" aria-label="Fjern {{ e.navn }}">Fjern</button>
       </div>
     </li>
@@ -144,7 +158,12 @@
 {% if uge.forslag %}
 <div class="bundbjaelke" {% if arbejder %}hidden{% endif %}>
   <div class="bundbjaelke-inder">
-    <p class="taeller"><strong data-taeller>{{ antal_valgt }}</strong> valgt</p>
+    <p class="taeller">
+      <strong data-taeller>{{ antal_valgt }}</strong> valgt
+      <span class="taeller-pris" data-pris-boks {% if not totaler.antal %}hidden{% endif %}>
+        · ca. <strong data-pris>{{ totaler.pris }}</strong> kr.
+      </span>
+    </p>
     <button class="knap" data-handling="lav-madplan" {% if antal_valgt == 0 %}disabled{% endif %}>
       Lav madplanen
     </button>

@@ -119,7 +119,26 @@ Familiens egne ønsker ligger i `uge["egne"]` som
   `ret.get("tilbuds_ids") or []` og markerer dem som familiens eget ønske i
   prompten, så modellen ikke leder efter tilbud der ikke findes.
 
-`web._antal_valgt()` tæller begge dele — brug den, ikke `len(uge["valgt"])`.
+`store.antal_valgt()` tæller begge dele — brug den, ikke `len(uge["valgt"])`.
+Den ligger i `store` og ikke i `web`, fordi `flow.paamindelse()` også skal
+bruge den, og `web` importerer `flow` — ikke omvendt.
+
+### Ugedag og ugens pris
+
+Hver ret kan tildeles en aften: `forslag[i]["dag"]` og `egne[i]["dag"]`, tom
+streng eller et navn fra `web.DAGE`. Valget er **manuelt** — AI-kaldene ved
+intet om dage.
+
+Opskrifterne fra kald 2 kender ikke dagen; `web._med_dage()` kobler den på via
+rettens navn og sorterer efter ugens rækkefølge, med retter uden dag sidst.
+Matcher et navn ikke — modellen kan have omformuleret det — ryger retten
+bagerst uden dag frem for at forsvinde.
+
+`web._totaler()` giver `antal`, `pris` og `spar` og returneres fra alle
+endpoints der ændrer valg eller portioner, så bundbjælken kan opdateres uden
+at genindlæse. **Prisen er et skøn**: `pris_pr_portion` er modellens vurdering,
+ikke en beregning ud fra tilbudspriserne — deraf "ca." i skabelonen. `spar` er
+derimod rigtige tal fra REMA.
 
 ### Udrulning
 
