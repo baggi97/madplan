@@ -97,12 +97,25 @@ De ligger i en `naering:`-blok og ikke fladt som `maks_kalorier`, fordi den
 generiske `maks_*`-løkke i `_regeltekst()` ellers ville rendere dem som
 kategorilofter: "højst 700 retter af typen 'kalorier'".
 
-**Vær varsom med tallene.** De er modellens skøn, ikke en beregning, og målt
-2026-09-01 klumpede alle fjorten retter sig mellem 50 og 55 g protein da
-kravet var 50. Det er ikke en naturlig fordeling — modellen rapporterer det
-tal der skal til for at slippe igennem. Filteret fanger stadig dem den selv
-indrømmer er for lave (en linsegryde på 22 g blev kasseret), men et tal lige
-over grænsen skal ikke læses som en måling.
+**Tallene følger kravet, ikke retterne.** Målt 2026-09-01 med to tærskler:
+
+```
+min_protein_g: 50  ->  50 50 50 50 51 51 51 52 52 52 53 54 55 55
+min_protein_g: 40  ->  40 40 40 41 41 41 42 42 42 42 43 43 44 44 45
+```
+
+Hele fordelingen flyttede sig ti gram ned sammen med tærsklen, og begge gange
+ligger alle retter inden for fem gram lige over kravet. En linsegryde med
+rodfrugter blev vurderet til 22 g ved det høje krav og 41 g ved det lave.
+
+Så filteret er en **grov si mod det åbenlyst utilstrækkelige**, ikke en
+næringsberegning. Det fanger de retter modellen selv indrømmer ligger langt
+under, og det er værdien. Læs ikke et tal lige over grænsen som en måling, og
+lad være med at bruge tallene til noget der kræver præcision.
+
+For høj en tærskel koster i øvrigt bredde: ved 50 g kom der kun fjorten
+forslag, ingen vegetarret, og elleve af fjorten var danske kødretter. Ved 40 g
+kom der femten, en vegetarret og fire forskellige køkkener.
 
 ### Tilstandsmaskine
 

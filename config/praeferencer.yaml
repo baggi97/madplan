@@ -43,7 +43,7 @@ kostregler:
   # Hårde næringskrav pr. portion. Retter der ikke lever op til dem kasseres
   # i koden. Bemærk at tallene er modellens skøn, ikke en beregning.
   naering:
-    min_protein_g: 50
+    min_protein_g: 40
     maks_kalorier: 700
 
 # Praktiske rammer
