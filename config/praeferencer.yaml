@@ -30,8 +30,7 @@ oensker:
 #   pris:     dyre (kræver at dyr_over_kr er sat)
 kostregler:
   profil:
-    - proteinrige retter
-    - kaloriefattige retter
+    - mættende hverdagsmad med rigeligt protein
   maks_vegetar: 1
   maks_fisk: 1
   maks_asiatisk: 1
@@ -41,6 +40,11 @@ kostregler:
   # Samme tilbud må højst bruges i så mange retter. Uden det bygger modellen
   # gerne tre aftener på den samme spidskål fordi den er billig.
   maks_gentaget_tilbud: 2
+  # Hårde næringskrav pr. portion. Retter der ikke lever op til dem kasseres
+  # i koden. Bemærk at tallene er modellens skøn, ikke en beregning.
+  naering:
+    min_protein_g: 50
+    maks_kalorier: 700
 
 # Praktiske rammer
 hverdag_maks_minutter: 30

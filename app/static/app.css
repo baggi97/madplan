@@ -770,3 +770,7 @@ li { list-style: none; }
 }
 
 .rester-liste strong { color: var(--blaek); }
+
+/* Næringstallene er modellens skøn, ikke en beregning — derfor samme
+   dæmpede udseende som de øvrige fakta, ikke noget der ser målt ud. */
+.fakta-naering { color: var(--groen); font-weight: 600; }

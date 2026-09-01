@@ -38,6 +38,8 @@
 
         <span class="ret-fakta">
           <span class="fakta">{{ ret.tid_min }} min</span>
+          {% if ret.protein_g %}<span class="fakta fakta-naering">{{ ret.protein_g }} g protein</span>{% endif %}
+          {% if ret.kalorier %}<span class="fakta">{{ ret.kalorier }} kcal</span>{% endif %}
           {% if ret.spar > 0 %}<span class="fakta fakta-spar">Spar {{ ret.spar }} kr.</span>{% endif %}
         </span>
 

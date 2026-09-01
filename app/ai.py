@@ -44,6 +44,18 @@ VAERKTOEJ_FORSLAG = {
                         },
                         "tid_min": {"type": "integer", "description": "Tilberedningstid i minutter"},
                         "pris_pr_portion": {"type": "number", "description": "Anslået pris i kroner"},
+                        "protein_g": {
+                            "type": "integer",
+                            "description": (
+                                "Anslået protein i gram PR. PORTION. Vær ærlig — "
+                                "et for højt tal får retten valgt på et forkert "
+                                "grundlag."
+                            ),
+                        },
+                        "kalorier": {
+                            "type": "integer",
+                            "description": "Anslåede kilokalorier PR. PORTION.",
+                        },
                         "tilbuds_ids": {
                             "type": "array",
                             "items": {"type": "string"},
@@ -76,7 +88,7 @@ VAERKTOEJ_FORSLAG = {
                     },
                     "required": [
                         "navn", "beskrivelse", "tid_min", "pris_pr_portion",
-                        "tilbuds_ids", "kategori", "koekken",
+                        "tilbuds_ids", "kategori", "koekken", "protein_g", "kalorier",
                     ],
                 },
             }
@@ -350,10 +362,35 @@ def _regeltekst(regler: dict) -> str:
                     loft, ret_ord, float(regler.get("dyr_over_kr") or 0)
                 )
             )
+        elif maerkat == "gentaget_tilbud":
+            # Ikke en kategori, men et loft pr. tilbud. Uden denne gren
+            # rendered den generiske løkke "højst 2 retter af typen
+            # 'gentaget_tilbud'", hvilket ikke betyder noget.
+            linjer.append(
+                "- Brug højst det samme tilbud i {} {}.".format(loft, ret_ord)
+            )
         else:
             linjer.append(
                 "- Højst {} {} af typen '{}'.".format(loft, ret_ord, maerkat)
             )
+    naering = regler.get("naering") or {}
+    if _heltal(naering.get("min_protein_g")):
+        linjer.append(
+            "- Mindst {} g protein pr. portion. Det er et hårdt krav — retter "
+            "under kasseres.".format(naering["min_protein_g"])
+        )
+    if _heltal(naering.get("maks_kalorier")):
+        linjer.append(
+            "- Højst {} kcal pr. portion. Også et hårdt krav.".format(
+                naering["maks_kalorier"]
+            )
+        )
+    if naering:
+        linjer.append(
+            "- Udfyld `protein_g` og `kalorier` ærligt pr. portion. Skøn dem ud "
+            "fra mængderne i retten; pynt ikke tallene for at slippe igennem."
+        )
+
     if not linjer:
         return ""
     return "Krav til retterne:\n" + "\n".join(linjer) + "\n\n"
@@ -455,9 +492,14 @@ def _rens(retter: list[dict], tilbud: list[dict], praef: dict, undgaa: list[str]
     return _maks_uden_tilbud(
         _spred_tilbud(
             _haandhaev_lofter(
-                _fjern_gentagelser(
-                    _fjern_uoenskede(_valider_forslag(retter, gyldige), tilbud, praef),
-                    undgaa,
+                _naeringskrav(
+                    _fjern_gentagelser(
+                        _fjern_uoenskede(
+                            _valider_forslag(retter, gyldige), tilbud, praef
+                        ),
+                        undgaa,
+                    ),
+                    regler,
                 ),
                 regler,
             ),
@@ -650,6 +692,50 @@ def _fjern_gentagelser(retter: list[dict], tidligere: list[str]) -> list[dict]:
                 ret.get("navn"), traef, config.UNDGAA_UGER, lighed,
             )
             continue
+        ok.append(ret)
+    return ok
+
+
+def _naeringskrav(retter: list[dict], regler: dict) -> list[dict]:
+    """Kasserer retter der ikke lever op til de hårde næringskrav pr. portion.
+
+    Tallene er **modellens skøn**, ikke en beregning — samme forbehold som
+    `pris_pr_portion` og `dyre`-mærkatet. En ret der siger 52 g protein kan
+    reelt være 35. Filteret er alligevel værd at have: modellen skal binde sig
+    til et tal, og vi afviser dem den selv indrømmer er for lave.
+
+    Mangler tallet, kasseres retten. Ellers ville "glem at udfylde feltet"
+    være vejen udenom kravet.
+    """
+    naering = regler.get("naering") or {}
+    min_protein = naering.get("min_protein_g")
+    maks_kcal = naering.get("maks_kalorier")
+    if not _heltal(min_protein) and not _heltal(maks_kcal):
+        return retter
+
+    ok = []
+    for ret in retter:
+        protein, kcal = ret.get("protein_g"), ret.get("kalorier")
+        if _heltal(min_protein):
+            if not isinstance(protein, (int, float)) or isinstance(protein, bool):
+                log.warning("Kasserer '%s' — mangler protein_g", ret.get("navn"))
+                continue
+            if protein < min_protein:
+                log.warning(
+                    "Kasserer '%s' — %s g protein, kravet er %s",
+                    ret.get("navn"), protein, min_protein,
+                )
+                continue
+        if _heltal(maks_kcal):
+            if not isinstance(kcal, (int, float)) or isinstance(kcal, bool):
+                log.warning("Kasserer '%s' — mangler kalorier", ret.get("navn"))
+                continue
+            if kcal > maks_kcal:
+                log.warning(
+                    "Kasserer '%s' — %s kcal, loftet er %s",
+                    ret.get("navn"), kcal, maks_kcal,
+                )
+                continue
         ok.append(ret)
     return ok
 

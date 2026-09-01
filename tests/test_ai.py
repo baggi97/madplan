@@ -261,3 +261,73 @@ def test_dagen_kommer_med_i_prompten_til_kald_2():
 
     assert "til 3 personer (torsdag)" in fanget["besked"]
     assert "rester" in fanget["system"].lower()
+
+
+# --- næringskrav ------------------------------------------------------
+# Tallene er modellens skøn, ikke en beregning. Filteret afviser dem
+# modellen selv indrømmer er for lave.
+
+NAERING = {"naering": {"min_protein_g": 50, "maks_kalorier": 700}}
+
+
+def _n(navn, protein=None, kalorier=None):
+    r = ret(navn)
+    if protein is not None:
+        r["protein_g"] = protein
+    if kalorier is not None:
+        r["kalorier"] = kalorier
+    return r
+
+
+@pytest.mark.parametrize(
+    "protein, kalorier, beholdes",
+    [
+        (55, 650, True),      # opfylder begge
+        (50, 700, True),      # præcis på grænserne
+        (49, 650, False),     # for lidt protein
+        (55, 701, False),     # for mange kalorier
+        (30, 900, False),     # begge dele
+    ],
+)
+def test_naeringskrav(protein, kalorier, beholdes):
+    ud = ai._naeringskrav([_n("Ret", protein, kalorier)], NAERING)
+    assert bool(ud) is beholdes
+
+
+def test_manglende_tal_kasseres():
+    """Ellers ville 'glem at udfylde feltet' være vejen udenom kravet."""
+    assert ai._naeringskrav([_n("Uden protein", kalorier=600)], NAERING) == []
+    assert ai._naeringskrav([_n("Uden kcal", protein=60)], NAERING) == []
+    assert ai._naeringskrav([_n("Uden begge")], NAERING) == []
+
+
+def test_uden_naeringsregler_trimmes_intet():
+    ind = [_n("A"), _n("B", 10, 2000)]
+    assert ai._naeringskrav(ind, {}) == ind
+    assert ai._naeringskrav(ind, {"naering": {}}) == ind
+
+
+def test_kun_proteinkrav():
+    regler = {"naering": {"min_protein_g": 50}}
+    assert len(ai._naeringskrav([_n("A", 60, 2000)], regler)) == 1   # kcal ligegyldig
+    assert ai._naeringskrav([_n("B", 40, 300)], regler) == []
+
+
+def test_naeringstal_er_paakraevet_i_skemaet():
+    felter = ai.VAERKTOEJ_FORSLAG["input_schema"]["properties"]["retter"]["items"]
+    assert "protein_g" in felter["properties"] and "kalorier" in felter["properties"]
+    assert "protein_g" in felter["required"] and "kalorier" in felter["required"]
+
+
+def test_gentaget_tilbud_beskrives_rigtigt_i_prompten():
+    """Den generiske maks_*-løkke ville ellers skrive 'retter af typen
+    gentaget_tilbud', hvilket ikke betyder noget."""
+    tekst = ai._regeltekst({"maks_gentaget_tilbud": 2})
+    assert "samme tilbud i 2 retter" in tekst
+    assert "typen 'gentaget_tilbud'" not in tekst
+
+
+def test_naeringskrav_staar_i_prompten():
+    tekst = ai._regeltekst(NAERING)
+    assert "Mindst 50 g protein" in tekst
+    assert "Højst 700 kcal" in tekst

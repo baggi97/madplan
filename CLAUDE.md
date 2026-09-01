@@ -88,6 +88,22 @@ derimod både en linje i `ai.KATEGORIER`/`ai.KOEKKENER` og i skemaets `enum`.
 Bemærk at `dyre` hviler på modellens eget prisskøn i `pris_pr_portion`. Det er
 et skøn, ikke en beregning ud fra tilbudspriserne.
 
+**Næringskrav** (`kostregler.naering`) er hårde tærskler pr. portion:
+`min_protein_g` og `maks_kalorier`. `ai._naeringskrav()` kasserer retter der
+ikke lever op til dem, og kasserer også retter hvor tallet mangler — ellers
+ville "glem at udfylde feltet" være vejen udenom kravet.
+
+De ligger i en `naering:`-blok og ikke fladt som `maks_kalorier`, fordi den
+generiske `maks_*`-løkke i `_regeltekst()` ellers ville rendere dem som
+kategorilofter: "højst 700 retter af typen 'kalorier'".
+
+**Vær varsom med tallene.** De er modellens skøn, ikke en beregning, og målt
+2026-09-01 klumpede alle fjorten retter sig mellem 50 og 55 g protein da
+kravet var 50. Det er ikke en naturlig fordeling — modellen rapporterer det
+tal der skal til for at slippe igennem. Filteret fanger stadig dem den selv
+indrømmer er for lave (en linsegryde på 22 g blev kasseret), men et tal lige
+over grænsen skal ikke læses som en måling.
+
 ### Tilstandsmaskine
 
 En uge går gennem `tom → arbejder → vaelger → arbejder → klar`, med `fejl` som
