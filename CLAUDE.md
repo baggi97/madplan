@@ -325,11 +325,19 @@ To ting følger af fordelingen, og de er værd at kende før nogen "retter" dem:
 - **Vi lander typisk på 9-10, ikke altid 10.** Sæsonhalvdelen kan ikke altid
   fylde fem under proteinkravet: dansk efterårsmad er grøntsagstung, og
   grønlangkål med medister (26 g) og grønkålssuppe (24 g) blev begge kasseret.
-- **Køkkenvariationen falder.** Regel B beder eksplicit om "genkendelig dansk
-  hverdagsmad", så halvdelen af retterne er danske per instruks. Målt over tre
-  kørsler: 8/9, 10/10 og 7/9 danske. Vil man have bredere variation, er det
-  ordet "dansk" i regel B der skal væk — ikke variationsreglen, som allerede
-  siger det modsatte.
+- **Regel B siger bevidst ikke "dansk".** Det gjorde den, og så blev
+  halvdelen af ugen dansk per instruks. Målt tre kørsler hver vej:
+
+  | | Med "dansk" | Uden |
+  |---|---|---|
+  | danske retter | 25 af 28 (89 %) | 16 af 29 (55 %) |
+  | vegetarret | 1 af 3 kørsler | 3 af 3 |
+  | køkkener pr. uge | 1-2 | 4-5 |
+
+  Sæsonretterne er stadig genkendelig hverdagsmad — boeuf bourguignon, pasta
+  med hakket oksekød, bagte grøntsager med linser. Værnet mod restaurantmad
+  ligger i systemprompten og i "ikke fyld: retter familien ville lave
+  alligevel", ikke i ordet dansk. Sæt det ikke tilbage.
 
 `_valider_forslag()` kræver derfor **ikke længere** mindst ét tilbud pr. ret —
 den linje var hele spærren. Ukendte ID'er kasseres stadig; det er den
