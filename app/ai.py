@@ -441,14 +441,14 @@ FORSOEG_FORSLAG = 2
 
 
 def _system_prompt(regler: dict) -> str:
-    maks_uden = max(config.ANTAL_FORSLAG - config.MIN_MED_TILBUD, 0)
+    maks_uden = max(config.ANTAL_FORSLAG - config.ANTAL_MED_TILBUD, 0)
     return (
         "Du planlægger ugens aftensmad for en dansk husstand. Du foreslår "
         "almindelig, realistisk hverdagsmad — ikke restaurantretter. Svar "
         "altid på dansk.\n\n"
-        "Forslagene er todelte:\n"
-        "A. Mindst {med} retter SKAL bygge på varer fra tilbudslisten.\n"
-        "B. De øvrige — højst {uden} — er sæsonretter UDEN tilbud. Lad "
+        "Forslagene er todelte, og fordelingen er fast:\n"
+        "A. Præcis {med} retter SKAL bygge på varer fra tilbudslisten.\n"
+        "B. Præcis {uden} er sæsonretter UDEN tilbud. Lad "
         "`tilbuds_ids` være tom for dem. Det skal være genkendelig dansk "
         "hverdagsmad der passer til årstiden, ikke fyld: retter familien "
         "ville lave alligevel.\n\n"
@@ -478,7 +478,7 @@ def _system_prompt(regler: dict) -> str:
         "Nævn det heller ikke: ingen navne eller beskrivelser som "
         "'postejfri', 'uden nødder' eller 'undgået denne uge'. Find på noget "
         "andet, og lad som om varen ikke findes."
-    ).format(med=config.MIN_MED_TILBUD, uden=maks_uden, i_alt=config.ANTAL_FORSLAG)
+    ).format(med=config.ANTAL_MED_TILBUD, uden=maks_uden, i_alt=config.ANTAL_FORSLAG)
 
 
 def _rens(retter: list[dict], tilbud: list[dict], praef: dict, undgaa: list[str]) -> list[dict]:
@@ -489,7 +489,7 @@ def _rens(retter: list[dict], tilbud: list[dict], praef: dict, undgaa: list[str]
     """
     gyldige = {t["id"] for t in tilbud}
     regler = praef.get("kostregler") or {}
-    return _maks_uden_tilbud(
+    return _fordel_tilbud(
         _spred_tilbud(
             _haandhaev_lofter(
                 _naeringskrav(
@@ -505,7 +505,8 @@ def _rens(retter: list[dict], tilbud: list[dict], praef: dict, undgaa: list[str]
             ),
             regler.get("maks_gentaget_tilbud"),
         ),
-        max(config.ANTAL_FORSLAG - config.MIN_MED_TILBUD, 0),
+        config.ANTAL_MED_TILBUD,
+        max(config.ANTAL_FORSLAG - config.ANTAL_MED_TILBUD, 0),
     )
 
 
@@ -526,8 +527,9 @@ async def foreslaa_retter(tilbud: list[dict], praef: dict) -> list[dict]:
         f"{', '.join(undgaa) if undgaa else 'ingen historik endnu'}\n\n"
         f"Valgt ofte tidligere: {', '.join(signal['ofte_valgt']) or 'intet endnu'}\n"
         f"Fravalgt ofte tidligere: {', '.join(signal['ofte_fravalgt']) or 'intet endnu'}\n\n"
-        f"Foreslå præcis {config.ANTAL_FORSLAG} retter, hvoraf mindst "
-        f"{config.MIN_MED_TILBUD} bygger på tilbud."
+        f"Foreslå præcis {config.ANTAL_FORSLAG} retter: "
+        f"{config.ANTAL_MED_TILBUD} der bygger på tilbud, og "
+        f"{config.ANTAL_FORSLAG - config.ANTAL_MED_TILBUD} sæsonretter uden."
     )
 
     retter = _rens(_udpak_retter(await _kald(system, besked, VAERKTOEJ_FORSLAG, 6000)),
@@ -537,7 +539,8 @@ async def foreslaa_retter(tilbud: list[dict], praef: dict) -> list[dict]:
         if len(retter) >= config.ANTAL_FORSLAG:
             break
         mangler = config.ANTAL_FORSLAG - len(retter)
-        mangler_tilbud = max(config.MIN_MED_TILBUD - _med_tilbud(retter), 0)
+        mangler_tilbud = max(config.ANTAL_MED_TILBUD - _med_tilbud(retter), 0)
+        mangler_saeson = mangler - mangler_tilbud
         log.warning(
             "Kun %d forslag (%d med tilbud) — beder om %d mere, runde %d",
             len(retter), _med_tilbud(retter), mangler, runde + 1,
@@ -558,9 +561,8 @@ async def foreslaa_retter(tilbud: list[dict], praef: dict) -> list[dict]:
             + "\n\nDisse retter er allerede foreslået, lav {} ANDRE:\n{}".format(
                 mangler, ", ".join(r["navn"] for r in retter)
             )
-            + (
-                "\n{} af dem skal bygge på tilbud.".format(mangler_tilbud)
-                if mangler_tilbud else "\nDe må alle være sæsonretter uden tilbud."
+            + "\n{} af dem skal bygge på tilbud, {} skal være sæsonretter uden.".format(
+                mangler_tilbud, max(mangler_saeson, 0)
             )
             + (
                 "\nKategorierne {} er fyldt op — foreslå ikke flere af dem.".format(
@@ -576,10 +578,10 @@ async def foreslaa_retter(tilbud: list[dict], praef: dict) -> list[dict]:
             log.warning("Runden gav ingen brugbare retter — stopper her")
             break
 
-    if _med_tilbud(retter) < config.MIN_MED_TILBUD:
+    if _med_tilbud(retter) < config.ANTAL_MED_TILBUD:
         log.warning(
             "Kun %d af %d retter bygger på tilbud (ville have mindst %d)",
-            _med_tilbud(retter), len(retter), config.MIN_MED_TILBUD,
+            _med_tilbud(retter), len(retter), config.ANTAL_MED_TILBUD,
         )
     return retter[: config.ANTAL_FORSLAG]
 
@@ -740,22 +742,31 @@ def _naeringskrav(retter: list[dict], regler: dict) -> list[dict]:
     return ok
 
 
-def _maks_uden_tilbud(retter: list[dict], maks: int) -> list[dict]:
-    """Holder gulvet for hvor mange retter der skal bygge på ugens tilbud.
+def _fordel_tilbud(retter: list[dict], maks_med: int, maks_uden: int) -> list[dict]:
+    """Holder fordelingen mellem tilbudsretter og sæsonretter.
 
-    Udtrykt som et loft fra den anden side: er der plads til 15 forslag og
-    mindst 8 skal bruge tilbud, må højst 7 stå uden. Rækkefølgen bevares.
+    Loft i **begge** retninger. Uden et loft på tilbudssiden bygger modellen
+    alle retter på tilbud, fordi det er den nemmeste vej — målt 2026-09-03 gav
+    et rent gulv på fem ti tilbudsretter og nul sæsonretter. Rækkefølgen
+    bevares, så det er de senere retter i den fyldte halvdel der ryger.
     """
-    if maks < 0:
-        return retter
-    uden = 0
+    med = uden = 0
     ok = []
     for ret in retter:
-        if not (ret.get("tilbuds_ids") or []):
-            if uden >= maks:
+        har_tilbud = bool(ret.get("tilbuds_ids") or [])
+        if har_tilbud:
+            if maks_med >= 0 and med >= maks_med:
+                log.warning(
+                    "Kasserer '%s' — der er allerede %d retter med tilbud",
+                    ret.get("navn"), maks_med,
+                )
+                continue
+            med += 1
+        else:
+            if maks_uden >= 0 and uden >= maks_uden:
                 log.warning(
                     "Kasserer '%s' — der er allerede %d retter uden tilbud",
-                    ret.get("navn"), maks,
+                    ret.get("navn"), maks_uden,
                 )
                 continue
             uden += 1

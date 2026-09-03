@@ -156,16 +156,28 @@ def test_tom_historik_lader_alt_passere():
     assert ai._fjern_gentagelser(ind, []) == ind
 
 
-# --- _maks_uden_tilbud ------------------------------------------------
+# --- _fordel_tilbud ---------------------------------------------------
+# Loft i begge retninger. Uden et loft paa tilbudssiden bygger modellen alle
+# retter paa tilbud, og saa forsvinder saesonretterne — maalt 2026-09-03.
 
-def test_maks_uden_tilbud_bevarer_raekkefoelge():
+def test_fordeling_bevarer_raekkefoelge():
     ind = [ret("m1", ids=["1"]), ret("u1"), ret("m2", ids=["2"]), ret("u2"), ret("u3")]
-    assert [r["navn"] for r in ai._maks_uden_tilbud(ind, 2)] == ["m1", "u1", "m2", "u2"]
+    assert [r["navn"] for r in ai._fordel_tilbud(ind, 2, 2)] == ["m1", "u1", "m2", "u2"]
 
 
-def test_maks_uden_tilbud_nul_kraever_tilbud_paa_alle():
+def test_for_mange_med_tilbud_trimmes():
+    ind = [ret("m%d" % i, ids=["1"]) for i in range(4)] + [ret("u1")]
+    assert [r["navn"] for r in ai._fordel_tilbud(ind, 2, 2)] == ["m0", "m1", "u1"]
+
+
+def test_nul_uden_tilbud_kraever_tilbud_paa_alle():
     ind = [ret("m", ids=["1"]), ret("u")]
-    assert [r["navn"] for r in ai._maks_uden_tilbud(ind, 0)] == ["m"]
+    assert [r["navn"] for r in ai._fordel_tilbud(ind, 5, 0)] == ["m"]
+
+
+def test_negativt_loft_slaar_fra():
+    ind = [ret("m", ids=["1"]), ret("u")]
+    assert ai._fordel_tilbud(ind, -1, -1) == ind
 
 
 # --- basisvarer -------------------------------------------------------

@@ -1,7 +1,7 @@
 # Madplan
 
 Selvstændig Docker-container: henter REMA 1000's ugentlige tilbud, lader Claude
-foreslå femten retter, familien vælger via et website, og der
+foreslå ti retter, familien vælger via et website, og der
 genereres opskrifter plus en delt indkøbsliste.
 
 Ingen Home Assistant, ingen eksterne afhængigheder ud over Anthropic API'et.
@@ -113,9 +113,9 @@ næringsberegning. Det fanger de retter modellen selv indrømmer ligger langt
 under, og det er værdien. Læs ikke et tal lige over grænsen som en måling, og
 lad være med at bruge tallene til noget der kræver præcision.
 
-For høj en tærskel koster i øvrigt bredde: ved 50 g kom der kun fjorten
-forslag, ingen vegetarret, og elleve af fjorten var danske kødretter. Ved 40 g
-kom der femten, en vegetarret og fire forskellige køkkener.
+For høj en tærskel koster i øvrigt bredde: målt ved 15 forslag gav 50 g kun
+fjorten retter, ingen vegetarret og elleve danske kødretter, mens 40 g gav
+femten, en vegetarret og fire køkkener. Samme mekanik gælder ved 10.
 
 ### Tilstandsmaskine
 
@@ -287,7 +287,7 @@ fjernes.
 
 ## AI-designet
 
-**To kald, ikke ét.** Kald 1 foreslår femten retter. Kald 2 skriver opskrifter for
+**To kald, ikke ét.** Kald 1 foreslår ti retter. Kald 2 skriver opskrifter for
 kun de valgte. At generere ti fulde opskrifter og smide fem væk er både dyrere
 og giver dårligere resultat.
 
@@ -298,19 +298,38 @@ pålideligt end at bede om JSON i prosa.
 **Validering mod opdigtede tilbud.** Modellen skal returnere `tilbuds_ids` der
 findes i input. `ai._valider_forslag()` kasserer retter med ukendte ID'er, og
 `foreslaa_retter()` beder om erstatninger op til `FORSOEG_FORSLAG` gange hvis
-der bliver for få tilbage. To runder, ikke én: med lofterne på 1 og 15 retter
-rækker den første sjældent. Runden fortæller modellen præcist hvor mange der
+der bliver for få tilbage. To runder, ikke én: lofterne på 1 gør at den
+første runde ikke altid rækker. Runden fortæller modellen præcist hvor mange der
 mangler, hvor mange af dem der skal bruge tilbud, og hvilke kategorier der er
 fyldte — og afbryder hvis en runde ikke tilføjer noget, så vi ikke betaler for
 et kald der ikke rykker. Uden det trin foreslår modellen før eller siden kylling til en pris
 der ikke eksisterer. **Fjern ikke dette.**
 
-**Forslagene er todelte.** Mindst `MIN_MED_TILBUD` (8) af de
-`ANTAL_FORSLAG` (15) retter skal bygge på ugens tilbud; resten er sæsonretter
+**Forslagene er todelte.** Mindst `MIN_MED_TILBUD` (5) af de
+`ANTAL_FORSLAG` (10) retter skal bygge på ugens tilbud; resten er sæsonretter
 med tom `tilbuds_ids`. Det er ikke dovenskab: med ~93 brugbare tilbud, og efter
-kostregler, fravalg, tilbudsspredning og suppefilter, er der sjældent 15
-fornuftige retter i én uges tilbud. Tvinger man dem igennem, bliver de sidste
-til fyld.
+kostregler, fravalg, tilbudsspredning og suppefilter, er der sjældent nok
+fornuftige retter i én uges tilbud til at fylde det hele. Tvinger man dem
+igennem, bliver de sidste til fyld.
+
+Tallene var 15 og 8, men så mange retter kunne ikke overholde alle
+kostreglerne på én gang — lofterne på 1 er de samme uanset hvor mange retter
+der skal findes, så de bider hårdere jo flere man beder om.
+
+**Det er en fordeling, ikke et gulv.** `_fordel_tilbud()` sætter loft i begge
+retninger. Med kun et gulv byggede modellen alle ti retter på tilbud, fordi
+det er den nemmeste vej, og sæsonretterne forsvandt helt — målt 2026-09-03.
+
+To ting følger af fordelingen, og de er værd at kende før nogen "retter" dem:
+
+- **Vi lander typisk på 9-10, ikke altid 10.** Sæsonhalvdelen kan ikke altid
+  fylde fem under proteinkravet: dansk efterårsmad er grøntsagstung, og
+  grønlangkål med medister (26 g) og grønkålssuppe (24 g) blev begge kasseret.
+- **Køkkenvariationen falder.** Regel B beder eksplicit om "genkendelig dansk
+  hverdagsmad", så halvdelen af retterne er danske per instruks. Målt over tre
+  kørsler: 8/9, 10/10 og 7/9 danske. Vil man have bredere variation, er det
+  ordet "dansk" i regel B der skal væk — ikke variationsreglen, som allerede
+  siger det modsatte.
 
 `_valider_forslag()` kræver derfor **ikke længere** mindst ét tilbud pr. ret —
 den linje var hele spærren. Ukendte ID'er kasseres stadig; det er den

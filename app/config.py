@@ -51,13 +51,14 @@ DEADLINE_CRON = os.getenv("DEADLINE_CRON", "sun 18")
 # er tid til at nå det.
 PAAMINDELSE_CRON = os.getenv("PAAMINDELSE_CRON", "sun 17")
 
-ANTAL_FORSLAG = int(os.getenv("ANTAL_FORSLAG", "15"))
+ANTAL_FORSLAG = int(os.getenv("ANTAL_FORSLAG", "10"))
 ANTAL_RETTER = int(os.getenv("ANTAL_RETTER", "5"))  # fallback hvis ingen stemmer
 
-# Hvor mange af forslagene der skal bygge på ugens tilbud. Resten må være
-# almindelige sæsonretter — der er sjældent 15 fornuftige retter i én uges
-# tilbud, og så bliver de sidste til fyld hvis man tvinger dem igennem.
-MIN_MED_TILBUD = int(os.getenv("MIN_MED_TILBUD", "8"))
+# Hvor mange af forslagene der bygger på ugens tilbud. Resten bliver
+# sæsonretter. Det er en **fordeling**, ikke et gulv: uden et loft på
+# tilbudssiden bygger modellen alle ti retter på tilbud, fordi det er den
+# nemmeste vej, og så forsvinder sæsonretterne helt.
+ANTAL_MED_TILBUD = int(os.getenv("ANTAL_MED_TILBUD", "5"))
 
 # Retter serveret inden for så mange uger foreslås ikke igen
 UNDGAA_UGER = int(os.getenv("UNDGAA_UGER", "4"))
