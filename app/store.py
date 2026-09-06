@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -26,6 +26,24 @@ def uge_noegle(d: date | None = None) -> str:
     d = d or nu().date()
     aar, uge, _ = d.isocalendar()
     return "{}-W{:02d}".format(aar, uge)
+
+
+def planuge(d: date | None = None) -> str:
+    """Nøglen for den uge madplanen gælder for.
+
+    Ikke det samme som "den ISO-uge vi er i". Planen laves søndag morgen og
+    gælder fra mandag, så søndag hører til den **kommende** uge — ikke den der
+    slutter samme dag.
+
+    Konkret: ISO-ugen for i morgen. Mandag til lørdag er det indeværende uge;
+    kun søndag ruller den frem.
+
+    Uden det skrev søndagskørslen til den uge der lige var gået, fandt de
+    forslag der allerede lå der, og meldte "forslag findes allerede" i stedet
+    for at planlægge den kommende uge. Set i drift søndag 2026-09-06.
+    """
+    d = d or nu().date()
+    return uge_noegle(d + timedelta(days=1))
 
 
 def uge_nummer(noegle: str) -> str:
@@ -72,7 +90,7 @@ def tom_uge(noegle: str) -> dict:
 
 
 def hent_uge(noegle: str | None = None) -> dict:
-    noegle = noegle or uge_noegle()
+    noegle = noegle or planuge()
     uge = _laes("uge-{}.json".format(noegle), tom_uge(noegle))
     for felt, standard in tom_uge(noegle).items():
         uge.setdefault(felt, standard)

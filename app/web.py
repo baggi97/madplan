@@ -171,13 +171,13 @@ def _antal_valgt(uge: dict) -> int:
 
 @app.get("/")
 async def forside():
-    return RedirectResponse("/uge/" + store.uge_noegle())
+    return RedirectResponse("/uge/" + store.planuge())
 
 
 @app.get("/uge/{noegle}")
 async def uge_side(request: Request, noegle: str):
     uge = _beriget(store.hent_uge(noegle))
-    er_denne_uge = noegle == store.uge_noegle()
+    er_denne_uge = noegle == store.planuge()
 
     if uge["status"] == store.KLAR:
         skabelon = "plan.html"
@@ -444,4 +444,4 @@ async def push_proeve():
 
 @app.get("/sundhedstjek")
 async def sundhedstjek():
-    return {"ok": True, "uge": store.uge_noegle(), "model": config.ANTHROPIC_MODEL}
+    return {"ok": True, "uge": store.planuge(), "model": config.ANTHROPIC_MODEL}

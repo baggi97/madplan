@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import datetime
+
+import pytest
 import json
 
 from app import config, store
@@ -10,6 +12,37 @@ from app import config, store
 def test_uge_noegle_bruger_isokalender():
     assert store.uge_noegle(datetime.date(2026, 8, 30)) == "2026-W35"
     assert store.uge_nummer("2026-W05") == "5"
+
+
+# --- planuge ----------------------------------------------------------
+# Fejlen i drift søndag 2026-09-06: køringen kl. 8 skrev til den uge der lige
+# var gået, fandt de forslag der allerede lå der, og meldte "forslag findes
+# allerede" i stedet for at planlægge den kommende uge.
+
+@pytest.mark.parametrize(
+    "dato, ugedag, iso, plan",
+    [
+        ("2026-09-07", "mandag",  "2026-W37", "2026-W37"),
+        ("2026-09-09", "onsdag",  "2026-W37", "2026-W37"),
+        ("2026-09-12", "lørdag",  "2026-W37", "2026-W37"),
+        ("2026-09-06", "søndag",  "2026-W36", "2026-W37"),   # ruller frem
+        ("2026-09-13", "søndag",  "2026-W37", "2026-W38"),
+    ],
+)
+def test_planuge_ruller_frem_om_soendagen(dato, ugedag, iso, plan):
+    d = datetime.date.fromisoformat(dato)
+    assert store.uge_noegle(d) == iso, "ISO-ugen skal være urørt"
+    assert store.planuge(d) == plan, "%s skal planlægge %s" % (ugedag, plan)
+
+
+def test_planuge_krydser_aarsskifte():
+    # Søndag 2026-12-27 er i uge 52; planen gælder uge 53
+    assert store.planuge(datetime.date(2026, 12, 27)) == "2026-W53"
+
+
+def test_hent_uge_bruger_planugen_som_standard(monkeypatch):
+    monkeypatch.setattr(store, "planuge", lambda d=None: "2026-W37")
+    assert store.hent_uge()["uge"] == "2026-W37"
 
 
 def test_tom_uge_har_alle_felter():

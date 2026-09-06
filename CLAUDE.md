@@ -117,6 +117,29 @@ For høj en tærskel koster i øvrigt bredde: målt ved 15 forslag gav 50 g kun
 fjorten retter, ingen vegetarret og elleve danske kødretter, mens 40 g gav
 femten, en vegetarret og fire køkkener. Samme mekanik gælder ved 10.
 
+### Hvilken uge planlægges?
+
+`store.planuge()` — **ikke** `uge_noegle()`. De to er ikke det samme, og
+forskellen er en fejl vi har haft i drift.
+
+`uge_noegle(d)` er ISO-ugen for en dato, rent og uden fortolkning.
+`planuge(d)` er den uge madplanen *gælder for*: ISO-ugen for dagen efter.
+Mandag til lørdag er det indeværende uge; kun søndag ruller den frem.
+
+Grunden er at planen laves søndag morgen og gælder fra mandag. Med
+`uge_noegle()` skrev søndagskørslen til den uge der sluttede samme dag, fandt
+de forslag der allerede lå der fra ugens løb, og meldte "forslag findes
+allerede" i stedet for at planlægge den kommende uge. Set søndag 2026-09-06:
+kørslen kl. 8 ramte uge 36 i stedet for 37.
+
+Alle steder der spørger "hvilken uge er det nu" skal bruge `planuge()`.
+`uge_noegle()` med en eksplicit dato er stadig den rigtige til at oversætte en
+dato til en nøgle — fx i historikken.
+
+Uger gemt før rettelsen bærer den gamle nøgle. De er stadig læselige gennem
+ugevælgeren; kun etiketten er forskudt én uge. Der er ikke lavet migrering,
+for det er historik og ikke noget der skal regnes på.
+
 ### Tilstandsmaskine
 
 En uge går gennem `tom → arbejder → vaelger → arbejder → klar`, med `fejl` som

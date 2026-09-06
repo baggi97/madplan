@@ -19,7 +19,7 @@ _laas = asyncio.Lock()
 
 async def hent_forslag(gennemtving: bool = False) -> None:
     async with _laas:
-        noegle = store.uge_noegle()
+        noegle = store.planuge()
         uge = store.hent_uge(noegle)
 
         if uge["status"] == store.ARBEJDER:
@@ -84,7 +84,7 @@ async def hent_forslag(gennemtving: bool = False) -> None:
 async def lav_madplan(noegle: str | None = None) -> None:
     mangler_forslag = False
     async with _laas:
-        noegle = noegle or store.uge_noegle()
+        noegle = noegle or store.planuge()
         uge = store.hent_uge(noegle)
 
         if uge["status"] == store.ARBEJDER:

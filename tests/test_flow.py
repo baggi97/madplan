@@ -24,7 +24,7 @@ def sendt(monkeypatch):
         beskeder.append((titel, tekst, sti))
 
     monkeypatch.setattr(flow.push, "send", falsk_send)
-    monkeypatch.setattr(store, "uge_noegle", lambda d=None: UGE)
+    monkeypatch.setattr(store, "planuge", lambda d=None: UGE)
     return beskeder
 
 

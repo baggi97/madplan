@@ -12,7 +12,7 @@ UGE = "2026-W35"
 
 @pytest.fixture
 def klient(monkeypatch):
-    monkeypatch.setattr(store, "uge_noegle", lambda d=None: UGE)
+    monkeypatch.setattr(store, "planuge", lambda d=None: UGE)
     return TestClient(web.app)
 
 
