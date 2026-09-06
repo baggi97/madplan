@@ -85,6 +85,14 @@
     </ol>
 
     {% if opskrift.tip %}<p class="tip">{{ opskrift.tip }}</p>{% endif %}
+
+    <div class="bedoem" data-bedoem="{{ opskrift.navn }}">
+      <span class="bedoem-tekst">Hvordan var den?</span>
+      <button class="bedoem-knap {% if bedoemt.get(opskrift.navn) == 'op' %}er-valgt{% endif %}"
+              data-vurdering="op" aria-label="God — {{ opskrift.navn }}">&#128077;</button>
+      <button class="bedoem-knap {% if bedoemt.get(opskrift.navn) == 'ned' %}er-valgt{% endif %}"
+              data-vurdering="ned" aria-label="Ikke igen — {{ opskrift.navn }}">&#128078;</button>
+    </div>
   </article>
   {% endfor %}
 </section>

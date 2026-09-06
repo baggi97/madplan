@@ -3,7 +3,20 @@
 
 const UGE = document.body.dataset.uge;
 
+/* Antal kald vi selv har i luften. Live-opdateringen holder fingrene væk
+   imens, så den ikke ruller vores egen optimistiske ændring tilbage. */
+let igangvaerende = 0;
+
 async function send(sti, krop) {
+  igangvaerende++;
+  try {
+    return await sendRaa(sti, krop);
+  } finally {
+    igangvaerende--;
+  }
+}
+
+async function sendRaa(sti, krop) {
   const svar = await fetch(sti, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -272,6 +285,101 @@ async function poll() {
 }
 
 if (document.querySelector(".arbejder-boks:not([hidden])")) poll();
+
+/* --- Live: se hvad de andre vælger --------------------------------- */
+
+/* Alle i huset vælger fra hver sin telefon, så siden skal vise de andres
+   valg uden at man genindlæser. Vi patcher DOM'en frem for at reloade —
+   ellers mister man sin plads på indkøbslisten midt i butikken.
+
+   Tre hensyn:
+   - Ingen polling når fanen er skjult. Telefoner ligger i lommen hele ugen.
+   - Ingen patch mens vores eget kald er undervejs; ellers ruller vi vores
+     egen optimistiske ændring tilbage et øjeblik.
+   - Ændrer antallet af egne retter sig, kan vi ikke patche — de kort findes
+     ikke i DOM'en. Så genindlæser vi, og kun der. */
+
+async function opdaterFraServer() {
+  if (document.hidden || igangvaerende > 0) return;
+  let d;
+  try {
+    d = await (await fetch(`/api/uge/${UGE}/live`)).json();
+  } catch (_) {
+    return; // netværket kan blinke
+  }
+
+  if (d.status === "arbejder") return location.reload();
+
+  const egneKort = document.querySelectorAll("[data-egen]");
+  if (egneKort.length && d.antal_egne !== egneKort.length) return location.reload();
+
+  const valgt = new Set(d.valgt);
+  document.querySelectorAll(".ret[data-idx]").forEach((knap) => {
+    saetValgt(knap, valgt.has(Number(knap.dataset.idx)));
+  });
+  const egneValgt = new Set(d.egne_valgt);
+  document.querySelectorAll(".ret[data-egen-idx]").forEach((knap) => {
+    saetValgt(knap, egneValgt.has(Number(knap.dataset.egenIdx)));
+  });
+
+  const krydset = new Set(d.afkrydset);
+  document.querySelectorAll(".linje input[data-vare]").forEach((felt) => {
+    const skal = krydset.has(felt.dataset.vare);
+    if (felt.checked !== skal) {
+      felt.checked = skal;
+      felt.closest(".linje").classList.toggle("er-krydset", skal);
+    }
+  });
+  opdaterFremskridt();
+  opdaterTaeller(d);
+}
+
+function saetValgt(knap, skal) {
+  const kort = knap.closest(".ret-kort");
+  if (kort.classList.contains("er-valgt") === skal) return;
+  kort.classList.toggle("er-valgt", skal);
+  knap.setAttribute("aria-pressed", String(skal));
+}
+
+if (document.querySelector(".ret, .linje input[data-vare]")) {
+  setInterval(opdaterFraServer, 5000);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) opdaterFraServer();
+  });
+}
+
+/* --- Bedøm retten --------------------------------------------------- */
+
+/* "Fravalgt" siger intet om hvorfor — valgte man fire ud af ti, siger det
+   intet om de seks andre. En tommel efter måltidet gør. Samme tryk igen
+   fjerner bedømmelsen, så man kan fortryde. */
+
+document.querySelectorAll("[data-bedoem]").forEach((boks) => {
+  const navn = boks.dataset.bedoem;
+  boks.querySelectorAll(".bedoem-knap").forEach((knap) => {
+    knap.addEventListener("click", async () => {
+      const foer = [...boks.querySelectorAll(".bedoem-knap")].map((k) =>
+        k.classList.contains("er-valgt")
+      );
+      const slaar_fra = knap.classList.contains("er-valgt");
+      boks.querySelectorAll(".bedoem-knap").forEach((k) => k.classList.remove("er-valgt"));
+      if (!slaar_fra) knap.classList.add("er-valgt");
+
+      try {
+        await send(`/api/uge/${UGE}/bedoem`, {
+          navn,
+          vurdering: knap.dataset.vurdering,
+        });
+        varsel(slaar_fra ? "Bedømmelse fjernet" : "Tak — det husker vi");
+      } catch (e) {
+        boks.querySelectorAll(".bedoem-knap").forEach((k, i) => {
+          k.classList.toggle("er-valgt", foer[i]);
+        });
+        varsel(e.message);
+      }
+    });
+  });
+});
 
 /* --- Push-beskeder --------------------------------------------------- */
 

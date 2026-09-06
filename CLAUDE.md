@@ -140,6 +140,37 @@ Uger gemt før rettelsen bærer den gamle nøgle. De er stadig læselige gennem
 ugevælgeren; kun etiketten er forskudt én uge. Der er ikke lavet migrering,
 for det er historik og ikke noget der skal regnes på.
 
+### Live-opdatering mellem telefonerne
+
+`GET /api/uge/{noegle}/live` giver den delte tilstand — valg, egne valg,
+afkrydsninger og totaler. `app.js` poller den hvert 5. sekund og **patcher
+DOM'en** frem for at genindlæse: ingen skal miste sin plads på indkøbslisten
+midt i butikken.
+
+Tre hensyn i klienten, og de er alle tre nødvendige:
+
+- **Pause når fanen er skjult.** Telefoner ligger i lommen hele ugen.
+- **Ingen patch mens vores eget kald er i luften.** `igangvaerende` tælles op
+  i `send()`; ellers ruller live-opdateringen vores egen optimistiske ændring
+  tilbage et øjeblik efter klikket.
+- **Genindlæs hvis antallet af egne retter har ændret sig.** De kort findes
+  ikke i DOM'en, så de kan ikke patches. `antal_egne` i svaret er der netop
+  for at opdage det.
+
+### Bedømmelser
+
+`praeferencesignal()` tæller valgt mod fravalgt, men "fravalgt" er et svagt
+signal: valgte familien fire ud af ti, siger det intet om de seks andre. En
+tommel op eller ned efter måltidet gør.
+
+Bedømmelser gemmes i **historikken**, ikke i ugefilen — det er derfra signalet
+til fremtidige forslag læses. Samme tryk igen fjerner den, så man kan fortryde.
+
+- `store.yndlingsretter()` sendes med i prompten som "familien kunne godt lide".
+- `store.nedstemte_retter()` føder `ai._fjern_nedstemte()`, der bruger **samme
+  navnematch som gentagelsesfilteret, men uden tidsgrænse**. En ret man ikke
+  kunne lide bliver ikke bedre af at der går fire uger.
+
 ### Tilstandsmaskine
 
 En uge går gennem `tom → arbejder → vaelger → arbejder → klar`, med `fejl` som
@@ -394,8 +425,12 @@ rigtige navne: identiske 1,00, omskrivninger 0,77-0,94, en helt anden ret langt
 under. Det er en heuristik, og **hver frasortering logges med lighedstallet**,
 så grænsen kan kalibreres uden at gætte.
 
-Rækkefølgen i `_rens()` er ikke tilfældig: gentagelser fjernes *før* lofterne,
-så en kasseret gentagelse ikke når at optage pladsen i et loft.
+Rækkefølgen i `_rens()` er ikke tilfældig: alt der alligevel skal kasseres —
+opdigtede tilbud, fravalgte varer, gentagelser, nedstemte retter, for lidt
+protein — ryger **før** lofterne. Ellers når en ret der skulle væk at optage
+pladsen i et loft, og så bliver ugen fattigere end den behøvede. Kæden er
+skrevet som en sekvens af tildelinger, ikke indlejrede kald; med otte trin
+bliver indlejring ulæselig.
 
 **Kun de 140 bedste tilbud når frem til modellen.** `rema.til_prompt_linjer()`
 beskærer til `maks=140`, og listen er sorteret efter rabatprocent, så det er de

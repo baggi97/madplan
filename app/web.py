@@ -197,6 +197,7 @@ async def uge_side(request: Request, noegle: str):
             "dage": DAGE,
             "v": STATISK_VERSION,
             "totaler": _totaler(uge),
+            "bedoemt": store.bedoemmelser(noegle),
             "arbejder": uge["status"] == store.ARBEJDER,
             "alle_uger": store.alle_uger(),
         },
@@ -207,6 +208,50 @@ async def uge_side(request: Request, noegle: str):
 async def status(noegle: str):
     uge = store.hent_uge(noegle)
     return {"status": uge["status"], "fejlbesked": uge["fejlbesked"]}
+
+
+@app.post("/api/uge/{noegle}/bedoem")
+async def bedoem(noegle: str, krop: dict):
+    """Tommel op eller ned efter måltidet.
+
+    Gemmes i historikken, ikke i ugefilen — det er derfra signalet til
+    fremtidige forslag læses. Samme vurdering igen fjerner den, så man kan
+    fortryde.
+    """
+    navn = str(krop.get("navn", "")).strip()
+    vurdering = krop.get("vurdering")
+    if not navn:
+        return _afvis("Mangler ret")
+    if vurdering not in (store.OP, store.NED, None):
+        return _afvis("Ukendt bedømmelse")
+
+    nuvaerende = store.bedoemmelser(noegle).get(navn)
+    ny_vurdering = None if nuvaerende == vurdering else vurdering
+    store.saet_bedoemmelse(noegle, navn, ny_vurdering)
+    return {"navn": navn, "vurdering": ny_vurdering}
+
+
+@app.get("/api/uge/{noegle}/live")
+async def live(noegle: str):
+    """Den delte tilstand, så flere telefoner kan følge med i hinanden.
+
+    README lover at alle i huset vælger fra hver sin telefon. Det passede,
+    men man så først de andres valg efter en genindlæsning. Klienten patcher
+    DOM'en med det her frem for at genindlæse — ingen skal miste sin plads
+    på indkøbslisten midt i butikken.
+    """
+    uge = store.hent_uge(noegle)
+    return {
+        "status": uge["status"],
+        "opdateret": uge.get("opdateret", ""),
+        "valgt": uge.get("valgt") or [],
+        "egne_valgt": [
+            i for i, e in enumerate(uge.get("egne") or []) if e.get("valgt")
+        ],
+        "antal_egne": len(uge.get("egne") or []),
+        "afkrydset": sorted(uge.get("afkrydset") or {}),
+        **_totaler(uge),
+    }
 
 
 @app.post("/api/uge/{noegle}/vaelg")

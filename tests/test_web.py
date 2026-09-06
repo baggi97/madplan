@@ -349,3 +349,57 @@ def test_versionen_skifter_naar_filen_goer(tmp_path):
 
 def test_version_uden_filer_vaelter_ikke(tmp_path):
     assert web._statisk_version([tmp_path / "findes-ikke.css"]) == "0"
+
+
+# --- live-opdatering --------------------------------------------------
+
+def test_live_giver_den_delte_tilstand(klient, vaelger_uge):
+    klient.post(f"/api/uge/{UGE}/vaelg", json={"idx": 1})
+    klient.post(f"/api/uge/{UGE}/kryds", json={"vare": "g0v0"})
+    d = klient.get(f"/api/uge/{UGE}/live").json()
+    assert d["valgt"] == [1]
+    assert d["afkrydset"] == ["g0v0"]
+    assert {"status", "antal", "pris", "spar", "egne_valgt", "antal_egne"} <= set(d)
+
+
+def test_live_melder_antal_egne_saa_klienten_kan_genindlaese(klient, vaelger_uge):
+    """Kortene for egne retter findes ikke i DOM'en før en genindlæsning, så
+    klienten skal kunne se at antallet har ændret sig."""
+    assert klient.get(f"/api/uge/{UGE}/live").json()["antal_egne"] == 0
+    klient.post(f"/api/uge/{UGE}/egen", json={"navn": "Tarteletter"})
+    assert klient.get(f"/api/uge/{UGE}/live").json()["antal_egne"] == 1
+
+
+# --- bedømmelse -------------------------------------------------------
+
+def _uge_spist():
+    store.tilfoej_historik(UGE, [{"navn": "Karry"}, {"navn": "Fisk"}], [0, 1])
+
+
+def test_bedoemmelse_gemmes_i_historikken(klient):
+    _uge_spist()
+    r = klient.post(f"/api/uge/{UGE}/bedoem", json={"navn": "Karry", "vurdering": "op"})
+    assert r.json() == {"navn": "Karry", "vurdering": "op"}
+    assert store.bedoemmelser(UGE) == {"Karry": "op"}
+
+
+def test_samme_tryk_igen_fjerner_bedoemmelsen(klient):
+    _uge_spist()
+    klient.post(f"/api/uge/{UGE}/bedoem", json={"navn": "Karry", "vurdering": "op"})
+    r = klient.post(f"/api/uge/{UGE}/bedoem", json={"navn": "Karry", "vurdering": "op"})
+    assert r.json()["vurdering"] is None
+    assert store.bedoemmelser(UGE) == {}
+
+
+def test_skift_fra_op_til_ned(klient):
+    _uge_spist()
+    klient.post(f"/api/uge/{UGE}/bedoem", json={"navn": "Karry", "vurdering": "op"})
+    klient.post(f"/api/uge/{UGE}/bedoem", json={"navn": "Karry", "vurdering": "ned"})
+    assert store.bedoemmelser(UGE) == {"Karry": "ned"}
+
+
+@pytest.mark.parametrize("krop", [{"navn": "", "vurdering": "op"},
+                                  {"navn": "Karry", "vurdering": "måske"}])
+def test_ugyldig_bedoemmelse_afvises(klient, krop):
+    _uge_spist()
+    assert klient.post(f"/api/uge/{UGE}/bedoem", json=krop).status_code == 400

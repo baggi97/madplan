@@ -343,3 +343,17 @@ def test_naeringskrav_staar_i_prompten():
     tekst = ai._regeltekst(NAERING)
     assert "Mindst 50 g protein" in tekst
     assert "Højst 700 kcal" in tekst
+
+
+# --- nedstemte retter -------------------------------------------------
+
+def test_fjern_nedstemte_bruger_samme_navnematch():
+    ned = ["Kyllingegryde med champignon"]
+    assert ai._fjern_nedstemte([ret("Kyllingegryde med champignon")], ned) == []
+    assert ai._fjern_nedstemte([ret("Kyllingegryde med svampe")], ned) == []
+    assert len(ai._fjern_nedstemte([ret("Lasagne")], ned)) == 1
+
+
+def test_ingen_nedstemte_trimmer_intet():
+    ind = [ret("A"), ret("B")]
+    assert ai._fjern_nedstemte(ind, []) == ind

@@ -179,6 +179,62 @@ def fjern_abonnement(endepunkt: str) -> bool:
     return True
 
 
+# --- bedømmelser ------------------------------------------------------
+#
+# "Fravalgt" er et svagt signal: valgte familien fire ud af ti, siger det
+# intet om de seks andre. En tommel op eller ned efter måltidet siger noget.
+
+OP, NED = "op", "ned"
+
+
+def saet_bedoemmelse(noegle: str, navn: str, vurdering: str | None) -> None:
+    """Skriver bedømmelsen i historikken for den uge retten blev spist i.
+
+    Den hører hjemme i historikken og ikke i ugefilen, fordi det er derfra
+    signalet til fremtidige forslag læses. `None` fjerner bedømmelsen igen.
+    """
+    hist = hent_historik()
+    for h in hist:
+        if h["uge"] != noegle:
+            continue
+        b = h.get("bedoemt") or {}
+        if vurdering is None:
+            b.pop(navn, None)
+        else:
+            b[navn] = vurdering
+        h["bedoemt"] = b
+        _skriv("historik.json", hist)
+        return
+
+
+def bedoemmelser(noegle: str) -> dict:
+    for h in hent_historik():
+        if h["uge"] == noegle:
+            return h.get("bedoemt") or {}
+    return {}
+
+
+def nedstemte_retter() -> list[str]:
+    """Retter familien har sagt fra til. Uden tidsgrænse — modsat
+    gentagelsesfilteret, for en ret man ikke kunne lide bliver ikke bedre
+    af at der går fire uger."""
+    navne = []
+    for h in hent_historik():
+        for navn, vurdering in (h.get("bedoemt") or {}).items():
+            if vurdering == NED:
+                navne.append(navn)
+    return navne
+
+
+def yndlingsretter(antal_uger: int = 26) -> list[str]:
+    navne = []
+    for h in hent_historik()[-antal_uger:]:
+        for navn, vurdering in (h.get("bedoemt") or {}).items():
+            if vurdering == OP:
+                navne.append(navn)
+    return navne
+
+
 def seneste_retter(antal_uger: int = 6) -> list[str]:
     """Retter serveret for nylig — bruges til at undgå gentagelser."""
     navne: list[str] = []

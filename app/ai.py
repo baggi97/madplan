@@ -483,29 +483,25 @@ def _system_prompt(regler: dict) -> str:
 
 
 def _rens(retter: list[dict], tilbud: list[dict], praef: dict, undgaa: list[str]) -> list[dict]:
-    """Hele valideringskæden, i den rækkefølge den skal køre.
+    """Hele valideringskæden, som en sekvens.
 
-    Gentagelser fjernes før lofterne, så en kasseret gentagelse ikke når at
-    optage pladsen i et loft.
+    Rækkefølgen er ikke tilfældig: alt der alligevel skal kasseres — opdigtede
+    tilbud, fravalgte varer, gentagelser, nedstemte retter, for lidt protein —
+    ryger FØR lofterne. Ellers når en ret der skulle væk at optage pladsen i
+    et loft, og så bliver ugen fattigere end den behøvede.
     """
     gyldige = {t["id"] for t in tilbud}
     regler = praef.get("kostregler") or {}
+
+    retter = _valider_forslag(retter, gyldige)
+    retter = _fjern_uoenskede(retter, tilbud, praef)
+    retter = _fjern_gentagelser(retter, undgaa)
+    retter = _fjern_nedstemte(retter, store.nedstemte_retter())
+    retter = _naeringskrav(retter, regler)
+    retter = _haandhaev_lofter(retter, regler)
+    retter = _spred_tilbud(retter, regler.get("maks_gentaget_tilbud"))
     return _fordel_tilbud(
-        _spred_tilbud(
-            _haandhaev_lofter(
-                _naeringskrav(
-                    _fjern_gentagelser(
-                        _fjern_uoenskede(
-                            _valider_forslag(retter, gyldige), tilbud, praef
-                        ),
-                        undgaa,
-                    ),
-                    regler,
-                ),
-                regler,
-            ),
-            regler.get("maks_gentaget_tilbud"),
-        ),
+        retter,
         config.ANTAL_MED_TILBUD,
         max(config.ANTAL_FORSLAG - config.ANTAL_MED_TILBUD, 0),
     )
@@ -513,6 +509,7 @@ def _rens(retter: list[dict], tilbud: list[dict], praef: dict, undgaa: list[str]
 
 async def foreslaa_retter(tilbud: list[dict], praef: dict) -> list[dict]:
     undgaa = store.seneste_retter(config.UNDGAA_UGER)
+    yndlinge = store.yndlingsretter()
     signal = store.praeferencesignal()
     regler = praef.get("kostregler") or {}
     maaned, aarstid = _saeson()
@@ -527,7 +524,10 @@ async def foreslaa_retter(tilbud: list[dict], praef: dict) -> list[dict]:
         f"Serveret de sidste {config.UNDGAA_UGER} uger (undgå disse):\n"
         f"{', '.join(undgaa) if undgaa else 'ingen historik endnu'}\n\n"
         f"Valgt ofte tidligere: {', '.join(signal['ofte_valgt']) or 'intet endnu'}\n"
-        f"Fravalgt ofte tidligere: {', '.join(signal['ofte_fravalgt']) or 'intet endnu'}\n\n"
+        f"Fravalgt ofte tidligere: {', '.join(signal['ofte_fravalgt']) or 'intet endnu'}\n"
+        f"Familien har SPIST og kunne godt lide: "
+        f"{', '.join(yndlinge) if yndlinge else 'intet bedømt endnu'}. Retter i "
+        f"den stil er velkomne — men ikke de samme igen.\n\n"
         f"Foreslå præcis {config.ANTAL_FORSLAG} retter: "
         f"{config.ANTAL_MED_TILBUD} der bygger på tilbud, og "
         f"{config.ANTAL_FORSLAG - config.ANTAL_MED_TILBUD} sæsonretter uden."
@@ -668,6 +668,33 @@ def _saeson() -> tuple[str, str]:
 def _normaliser_navn(navn: str) -> str:
     """Små bogstaver, tegnsætning væk, whitespace samlet."""
     return " ".join(re.sub(r"[^\w\s]", " ", str(navn).lower()).split())
+
+
+def _fjern_nedstemte(retter: list[dict], nedstemte: list[str]) -> list[dict]:
+    """Kasserer retter familien har sagt fra til.
+
+    Bruger samme navnematch som gentagelsesfilteret, men uden tidsgrænse: en
+    ret man ikke kunne lide bliver ikke bedre af at der går fire uger.
+    """
+    if not nedstemte:
+        return retter
+    ok = []
+    for ret in retter:
+        eget = _normaliser_navn(ret.get("navn", ""))
+        traef = max(
+            ((n, difflib.SequenceMatcher(None, eget, _normaliser_navn(n)).ratio())
+             for n in nedstemte),
+            key=lambda x: x[1],
+            default=(None, 0.0),
+        )
+        if traef[1] >= config.GENTAGELSE_GRAENSE:
+            log.warning(
+                "Kasserer '%s' — ligner '%s', som familien har stemt ned (%.2f)",
+                ret.get("navn"), traef[0], traef[1],
+            )
+            continue
+        ok.append(ret)
+    return ok
 
 
 def _fjern_gentagelser(retter: list[dict], tidligere: list[str]) -> list[dict]:

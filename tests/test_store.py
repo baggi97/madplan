@@ -128,3 +128,26 @@ def test_fjern_abonnement():
     assert store.fjern_abonnement("https://x/1") is True
     assert store.fjern_abonnement("https://ukendt") is False
     assert store.hent_abonnementer() == []
+
+
+# --- bedømmelser ------------------------------------------------------
+
+def test_nedstemte_retter_har_ingen_tidsgraense():
+    """En ret man ikke kunne lide bliver ikke bedre af at der går fire uger."""
+    for u in ("2026-W20", "2026-W35"):
+        store.tilfoej_historik(u, [{"navn": "Ret-%s" % u}], [0])
+        store.saet_bedoemmelse(u, "Ret-%s" % u, store.NED)
+    assert sorted(store.nedstemte_retter()) == ["Ret-2026-W20", "Ret-2026-W35"]
+
+
+def test_yndlingsretter_er_kun_dem_med_tommel_op():
+    store.tilfoej_historik("2026-W35", [{"navn": "God"}, {"navn": "Skidt"}], [0, 1])
+    store.saet_bedoemmelse("2026-W35", "God", store.OP)
+    store.saet_bedoemmelse("2026-W35", "Skidt", store.NED)
+    assert store.yndlingsretter() == ["God"]
+    assert store.nedstemte_retter() == ["Skidt"]
+
+
+def test_bedoemmelse_paa_ukendt_uge_gaar_stille_ned():
+    store.saet_bedoemmelse("2026-W99", "Findes ikke", store.OP)
+    assert store.bedoemmelser("2026-W99") == {}

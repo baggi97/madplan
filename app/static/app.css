@@ -774,3 +774,40 @@ li { list-style: none; }
 /* Næringstallene er modellens skøn, ikke en beregning — derfor samme
    dæmpede udseende som de øvrige fakta, ikke noget der ser målt ud. */
 .fakta-naering { color: var(--groen); font-weight: 600; }
+
+/* --- bedømmelse ------------------------------------------------------- */
+
+.bedoem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--linje);
+}
+
+.bedoem-tekst { font-size: .84rem; color: var(--graa); margin-right: auto; }
+
+.bedoem-knap {
+  padding: 4px 10px;
+  border: 1.5px solid var(--linje);
+  border-radius: 8px;
+  background: var(--kort);
+  font-size: 1rem;
+  line-height: 1.4;
+  cursor: pointer;
+  filter: grayscale(1);
+  opacity: .55;
+  transition: opacity .14s ease, border-color .14s ease, filter .14s ease;
+}
+
+.bedoem-knap:hover { opacity: .85; }
+.bedoem-knap:focus-visible { outline: 3px solid var(--gul); outline-offset: 2px; }
+
+/* Valgt bedømmelse er den eneste der får farve — så kan man se den på afstand */
+.bedoem-knap.er-valgt {
+  filter: none;
+  opacity: 1;
+  border-color: var(--blaek);
+  background: var(--papir);
+}
