@@ -16,7 +16,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Madplan">
 </head>
-<body data-uge="{{ uge.uge }}">
+<body data-uge="{{ uge.uge if uge else '' }}">
 
 <header class="top">
   <div class="top-inner">
@@ -24,8 +24,9 @@
       <span class="maerke-ord">Madplan</span>
     </a>
     <div class="top-hoejre">
-      <span class="ugemaerke">Uge {{ ugenr }}</span>
-      {% if alle_uger|length > 1 %}
+      <a class="top-link" href="/historik">Historik</a>
+      {% if ugenr %}<span class="ugemaerke">Uge {{ ugenr }}</span>{% endif %}
+      {% if alle_uger and alle_uger|length > 1 %}
       <select class="ugevaelger" onchange="location.href='/uge/'+this.value" aria-label="Skift uge">
         {% for u in alle_uger %}
         <option value="{{ u }}" {% if u == uge.uge %}selected{% endif %}>Uge {{ u.split('-W')[1]|int }} · {{ u.split('-W')[0] }}</option>

@@ -816,3 +816,92 @@ li { list-style: none; }
    Derfor grøn, som de øvrige tal vi står inde for. */
 .naering { color: var(--groen); font-weight: 600; }
 .naering-usikker { color: var(--graa); font-weight: 400; cursor: help; }
+
+/* Kun synlig når kæden kasserede noget. Dæmpet — det er en forklaring, ikke
+   en advarsel. */
+.frasorteret {
+  margin-top: 8px;
+  font-size: .84rem;
+  color: var(--graa);
+}
+
+/* --- Historik ------------------------------------------------------ */
+
+.top-link {
+  color: var(--papir);
+  font-size: .8rem;
+  font-weight: 600;
+  text-decoration: none;
+  opacity: .75;
+  padding: 4px 2px;
+}
+.top-link:hover, .top-link:focus-visible { opacity: 1; }
+
+/* Samme kort som .opskrift — historikken er den samme slags læsning. */
+.kort {
+  background: var(--kort);
+  border: 1.5px solid var(--linje);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--skygge);
+}
+
+.kort h2 {
+  font-size: 1.15rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.kort .under { margin-bottom: 12px; }
+
+.spist-liste, .nedstemt-liste, .tael-liste { list-style: none; }
+
+.spist-liste li, .nedstemt-liste li, .tael-liste li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--linje);
+}
+.spist-liste li:last-child,
+.nedstemt-liste li:last-child,
+.tael-liste li:last-child { border-bottom: none; }
+
+.spist-navn, .nedstemt-navn { flex: 1; }
+
+.dom {
+  flex: none;
+  font-size: .72rem;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+.dom.god { background: var(--groen); color: #fff; }
+.dom.daarlig { background: var(--papir); color: var(--graa); }
+
+.fortryd {
+  flex: none;
+  background: none;
+  border: 1.5px solid var(--linje);
+  border-radius: 999px;
+  color: var(--blaek);
+  font-family: inherit;
+  font-size: .78rem;
+  font-weight: 600;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.fortryd:hover { border-color: var(--blaek); }
+.fortryd:disabled { opacity: .5; cursor: default; }
+
+.tael {
+  flex: none;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: .82rem;
+  color: var(--graa);
+}
+
+.tom-linje { color: var(--graa); }

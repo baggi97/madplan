@@ -204,11 +204,33 @@ async def uge_side(request: Request, noegle: str):
             "er_denne_uge": er_denne_uge,
             "antal_valgt": _antal_valgt(uge),
             "dage": DAGE,
+            "oensket_antal": config.ANTAL_FORSLAG,
             "v": STATISK_VERSION,
             "totaler": _totaler(uge),
             "bedoemt": store.bedoemmelser(noegle),
             "arbejder": uge["status"] == store.ARBEJDER,
             "alle_uger": store.alle_uger(),
+        },
+    )
+
+
+@app.get("/historik")
+async def historik_side(request: Request):
+    """Hvad er der blevet spist, og hvad syntes I om det.
+
+    Her sidder også den eneste vej ud af en fejlklikket tommel ned:
+    `nedstemte_retter()` har ingen tidsgrænse, så uden en fortryd-knap skulle
+    man ind i en JSON-fil på NAS'en for at få retten tilbage i spil.
+    """
+    return skabeloner.TemplateResponse(
+        request,
+        "historik.html",
+        {
+            "oversigt": store.historik_oversigt(),
+            "uge": None,
+            "ugenr": "",
+            "alle_uger": [],
+            "v": STATISK_VERSION,
         },
     )
 

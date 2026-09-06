@@ -400,3 +400,54 @@ def test_oevrige_felter_bevares():
     ud = ai._udpak_madplan({"opskrifter": [], "indkoebsliste": [],
                             "rester": [{"vare": "fløde", "forslag": "brug den"}]})
     assert ud["rester"]
+
+
+# --- regnskab over filterkæden ---------------------------------------
+#
+# Uden det står grunden til at der kom 8 retter i stedet for 10 kun i en log
+# inde i en container på NAS'en.
+
+def _tilbud(n=3):
+    return [{"id": str(i), "navn": "vare {}".format(i)} for i in range(n)]
+
+
+def test_regnskab_navngiver_det_trin_der_kasserede():
+    """Rækkefølgen i kæden skal kunne aflæses af regnskabet.
+
+    En gentagelse tælles som gentagelse — ikke som et loft, selvom retten
+    også ville ryge dér. Fanger at to trin bytter plads.
+    """
+    retter = [
+        ret("Kylling i karry", ids=["0"], koekken="asiatisk"),
+        ret("Frikadeller", ids=["1"]),
+    ]
+    regnskab: dict = {}
+    ud = ai._rens(retter, _tilbud(), {}, ["Kylling i karry"], regnskab)
+
+    assert [r["navn"] for r in ud] == ["Frikadeller"]
+    assert regnskab == {"gentagelser": 1}
+
+
+def test_regnskab_er_tomt_naar_intet_frasorteres():
+    """Kom der det antal der blev bedt om, har familien ingen linje at læse."""
+    regnskab: dict = {}
+    ai._rens([ret("Frikadeller", ids=["0"])], _tilbud(), {}, [], regnskab)
+    assert regnskab == {}
+
+
+def test_rens_uden_regnskab_virker_stadig():
+    """Parameteren er valgfri — de eksisterende kaldesteder er urørte."""
+    assert len(ai._rens([ret("Frikadeller", ids=["0"])], _tilbud(), {}, [])) == 1
+
+
+def test_regnskab_taeller_naeringskravet_for_sig():
+    praef = {"kostregler": {"naering": {"min_protein_g": 40, "maks_kalorier": 700}}}
+    retter = [
+        ret("Frikadeller", ids=["0"], protein_g=45, kalorier=600),
+        ret("Pandekager", ids=["1"], kategori="vegetar", protein_g=9, kalorier=600),
+    ]
+    regnskab: dict = {}
+    ud = ai._rens(retter, _tilbud(), praef, [], regnskab)
+
+    assert [r["navn"] for r in ud] == ["Frikadeller"]
+    assert regnskab == {"for lidt protein eller for mange kalorier": 1}

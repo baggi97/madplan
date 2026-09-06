@@ -252,6 +252,28 @@ Familiens egne ønsker ligger i `uge["egne"]` som
 Den ligger i `store` og ikke i `web`, fordi `flow.paamindelse()` også skal
 bruge den, og `web` importerer `flow` — ikke omvendt.
 
+### Historik og fortryd
+
+`/historik` viser hvad der er blevet spist, hvad I syntes om det, og hvad der
+går oftest igen. Data samles i `store.historik_oversigt()`.
+
+Pris ligger ikke i `historik.json` men i ugefilerne, så oversigten slår den op
+med `hent_uge()` når filen stadig findes. Historikken holder 52 uger; ugefilerne
+kan være ryddet længe før. Så udelades tallet frem for at vise nul — nul kroner
+er en påstand, "vi ved det ikke" er sandheden.
+
+**Fortryd-knappen er sidens egentlige grund til at findes.**
+`store.nedstemte_retter()` har ingen tidsgrænse, så en fejlklikket tommel ned
+udelukker en ret for altid. Uden knappen skulle man ind i en JSON-fil på NAS'en
+for at hæve den. Den genbruger `POST /api/uge/{noegle}/bedoem`, som allerede
+fjerner bedømmelsen når man sender den samme vurdering igen — derfor bærer
+oversigten ugenøglen med hver nedstemning. Fjernes den, er der ingen vej
+tilbage fra et fejlklik.
+
+`base.html` renderer også uden en uge (`uge` er `None` på historiksiden), så
+ugemærket og ugevælgeren er betingede. Tilføjer man noget i headeren der læser
+`uge`, skal det have samme værn.
+
 ### Ugedag og ugens pris
 
 Hver ret kan tildeles en aften: `forslag[i]["dag"]` og `egne[i]["dag"]`, tom
@@ -474,9 +496,29 @@ så grænsen kan kalibreres uden at gætte.
 Rækkefølgen i `_rens()` er ikke tilfældig: alt der alligevel skal kasseres —
 opdigtede tilbud, fravalgte varer, gentagelser, nedstemte retter, for lidt
 protein — ryger **før** lofterne. Ellers når en ret der skulle væk at optage
-pladsen i et loft, og så bliver ugen fattigere end den behøvede. Kæden er
-skrevet som en sekvens af tildelinger, ikke indlejrede kald; med otte trin
-bliver indlejring ulæselig.
+pladsen i et loft, og så bliver ugen fattigere end den behøvede.
+
+Kæden er skrevet som en tabel af `(navn, filter)`-par der løbes igennem, ikke
+som indlejrede kald; med otte trin bliver indlejring ulæselig. Navnene er ikke
+kun dokumentation — de er dem familien læser, se regnskabet nedenfor.
+
+**Kæden fører regnskab.** `_rens()` tager et valgfrit `regnskab: dict` og
+tæller op hvor mange retter hvert trin kasserede. `foreslaa_retter()` fører
+det videre og samler på tværs af erstatningsrunderne, og
+`flow.hent_forslag()` gemmer det som `uge["frasorteret"]`. `vaelg.html` viser
+en dæmpet linje — men **kun** når der kom færre retter end `ANTAL_FORSLAG`:
+
+> Vi bad om 10 og fik 8. Frasorteret: 2 på gentagelser, 1 på kostreglerne.
+
+Kom der det antal der blev bedt om, står der ingenting; det er ikke noget
+nogen har brug for at vide. Trinnenes navne skal derfor være dansk der siger
+noget til en familie, ikke funktionsnavne — `_naeringskrav` hedder "for lidt
+protein eller for mange kalorier".
+
+Regnskabet tæller **antal, ikke hvilke retter**. Det er med vilje: navnet på en
+kasseret ret hører i loggen sammen med lighedstallet, ikke på en side familien
+kigger på. Parameteren er valgfri, så et kaldested uden regnskab virker
+uændret.
 
 **Kun de 140 bedste tilbud når frem til modellen.** `rema.til_prompt_linjer()`
 beskærer til `maks=140`, og listen er sorteret efter rabatprocent, så det er de
@@ -647,7 +689,7 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-115 tests, ingen netværkskald, ingen brug af den rigtige `data/`-mappe —
+227 tests, ingen netværkskald, ingen brug af den rigtige `data/`-mappe —
 `conftest.py` peger `config.DATA_DIR` på en `tmp_path` pr. test.
 
 Testene er ikke pyntearbejde. **Hvert filter i `ai.py` koder en fejl vi har
@@ -659,11 +701,11 @@ forenkle, falder en test med en besked om hvorfor det var der.
 
 | Fil | Dækker |
 |---|---|
-| `test_ai.py` | Filtrene og håndhævelsen — lofter, spredning, fravalg, gentagelser, basisvarer, sæson |
+| `test_ai.py` | Filtrene og håndhævelsen — lofter, spredning, fravalg, gentagelser, basisvarer, sæson, og at regnskabet navngiver det rigtige trin |
 | `test_kald.py` | Gentagelse ved 429 og 5xx mod en lokal server, og at 4xx **ikke** gentages |
 | `test_rema.py` | Normalisering, `UDELUK`, `UDELUK_NAVN`, prompt-linjer |
-| `test_store.py` | Ugefiler, atomisk skrivning, historik, abonnementer |
-| `test_web.py` | Endpoints gennem `TestClient` — grænser, 400, 409, egne retter |
+| `test_store.py` | Ugefiler, atomisk skrivning, historik, historikoversigt, abonnementer |
+| `test_web.py` | Endpoints gennem `TestClient` — grænser, 400, 409, egne retter, historiksiden og fortryd-knappen |
 
 Async-funktioner køres med `asyncio.run()` i testkroppen; der er bevidst ingen
 `pytest-asyncio`, så udviklingsafhængigheden er ét enkelt pakke.
@@ -686,6 +728,5 @@ playwright: viewport 420x880, klik på .ret og .boks, reload, tjek persistens
 
 - Flere kæder (Netto og Lidl har tilsvarende endpoints) med sammenligning af
   hvor det samlede indkøb er billigst
-- Portionsjustering pr. ret i UI'et
 - "Har vi det hjemme?"-trin før indkøbslisten låses
 - Eksport af opskrift til print

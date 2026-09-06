@@ -560,32 +560,54 @@ def _system_prompt(regler: dict) -> str:
     ).format(med=config.ANTAL_MED_TILBUD, uden=maks_uden, i_alt=config.ANTAL_FORSLAG)
 
 
-def _rens(retter: list[dict], tilbud: list[dict], praef: dict, undgaa: list[str]) -> list[dict]:
+def _rens(
+    retter: list[dict],
+    tilbud: list[dict],
+    praef: dict,
+    undgaa: list[str],
+    regnskab: dict | None = None,
+) -> list[dict]:
     """Hele valideringskæden, som en sekvens.
 
     Rækkefølgen er ikke tilfældig: alt der alligevel skal kasseres — opdigtede
     tilbud, fravalgte varer, gentagelser, nedstemte retter, for lidt protein —
     ryger FØR lofterne. Ellers når en ret der skulle væk at optage pladsen i
     et loft, og så bliver ugen fattigere end den behøvede.
+
+    `regnskab` er valgfrit. Gives det, tælles antal frasorterede op pr. trin,
+    så websitet kan sige hvorfor der kom færre retter end bedt om. Uden det
+    står grunden kun i en log inde i en container.
+
+    Navnene er dem familien læser. Hold dem i den slags sprog.
     """
     gyldige = {t["id"] for t in tilbud}
     regler = praef.get("kostregler") or {}
 
-    retter = _valider_forslag(retter, gyldige)
-    retter = _fjern_uoenskede(retter, tilbud, praef)
-    retter = _fjern_gentagelser(retter, undgaa)
-    retter = _fjern_nedstemte(retter, store.nedstemte_retter())
-    retter = _naeringskrav(retter, regler)
-    retter = _haandhaev_lofter(retter, regler)
-    retter = _spred_tilbud(retter, regler.get("maks_gentaget_tilbud"))
-    return _fordel_tilbud(
-        retter,
-        config.ANTAL_MED_TILBUD,
-        max(config.ANTAL_FORSLAG - config.ANTAL_MED_TILBUD, 0),
+    trin = (
+        ("ubrugelige forslag", lambda r: _valider_forslag(r, gyldige)),
+        ("fravalgte varer", lambda r: _fjern_uoenskede(r, tilbud, praef)),
+        ("gentagelser", lambda r: _fjern_gentagelser(r, undgaa)),
+        ("retter I har stemt ned", lambda r: _fjern_nedstemte(r, store.nedstemte_retter())),
+        ("for lidt protein eller for mange kalorier", lambda r: _naeringskrav(r, regler)),
+        ("kostreglerne", lambda r: _haandhaev_lofter(r, regler)),
+        ("samme tilbud brugt for tit", lambda r: _spred_tilbud(r, regler.get("maks_gentaget_tilbud"))),
+        ("fordelingen mellem tilbud og sæson", lambda r: _fordel_tilbud(
+            r, config.ANTAL_MED_TILBUD,
+            max(config.ANTAL_FORSLAG - config.ANTAL_MED_TILBUD, 0))),
     )
 
+    for navn, filtrer in trin:
+        foer = len(retter)
+        retter = filtrer(retter)
+        tabt = foer - len(retter)
+        if tabt and regnskab is not None:
+            regnskab[navn] = regnskab.get(navn, 0) + tabt
+    return retter
 
-async def foreslaa_retter(tilbud: list[dict], praef: dict) -> list[dict]:
+
+async def foreslaa_retter(
+    tilbud: list[dict], praef: dict, regnskab: dict | None = None
+) -> list[dict]:
     undgaa = store.seneste_retter(config.UNDGAA_UGER)
     yndlinge = store.yndlingsretter()
     signal = store.praeferencesignal()
@@ -612,7 +634,7 @@ async def foreslaa_retter(tilbud: list[dict], praef: dict) -> list[dict]:
     )
 
     retter = _rens(_udpak_retter(await _kald(system, besked, VAERKTOEJ_FORSLAG, 6000)),
-                   tilbud, praef, undgaa)
+                   tilbud, praef, undgaa, regnskab)
 
     for runde in range(FORSOEG_FORSLAG):
         if len(retter) >= config.ANTAL_FORSLAG:
@@ -652,7 +674,7 @@ async def foreslaa_retter(tilbud: list[dict], praef: dict) -> list[dict]:
         )
         svar = await _kald(system, ekstra, VAERKTOEJ_FORSLAG, 6000)
         foer = len(retter)
-        retter = _rens(retter + _udpak_retter(svar), tilbud, praef, undgaa)
+        retter = _rens(retter + _udpak_retter(svar), tilbud, praef, undgaa, regnskab)
         if len(retter) == foer:
             log.warning("Runden gav ingen brugbare retter — stopper her")
             break

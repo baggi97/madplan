@@ -151,3 +151,59 @@ def test_yndlingsretter_er_kun_dem_med_tommel_op():
 def test_bedoemmelse_paa_ukendt_uge_gaar_stille_ned():
     store.saet_bedoemmelse("2026-W99", "Findes ikke", store.OP)
     assert store.bedoemmelser("2026-W99") == {}
+
+
+# --- historik_oversigt ------------------------------------------------
+
+def test_oversigt_udelader_pris_naar_ugefilen_er_ryddet():
+    """Rækken skal med selvom ugefilen er væk — bare uden pris.
+
+    Nul kroner er en påstand; "vi ved det ikke" er sandheden. Historikken
+    holder 52 uger, ugefilerne kan være ryddet længe før.
+    """
+    store.tilfoej_historik("2026-W10", [{"navn": "Frikadeller"}], [0])
+    oversigt = store.historik_oversigt()
+
+    assert [u["uge"] for u in oversigt["uger"]] == ["2026-W10"]
+    assert oversigt["uger"][0]["pris"] is None
+    assert [r["navn"] for r in oversigt["uger"][0]["retter"]] == ["Frikadeller"]
+
+
+def test_oversigt_henter_prisen_fra_ugefilen_naar_den_findes():
+    uge = store.tom_uge("2026-W11")
+    uge.update({
+        "forslag": [{"navn": "Frikadeller", "pris_pr_portion": 25, "portioner": 4}],
+        "valgt": [0],
+    })
+    store.gem_uge(uge)
+    store.tilfoej_historik("2026-W11", uge["forslag"], [0])
+
+    assert store.historik_oversigt()["uger"][0]["pris"] == 100
+
+
+def test_oversigt_baerer_ugenoeglen_for_hver_nedstemning():
+    """Fortryd-knappen skal kunne ramme /api/uge/{noegle}/bedoem.
+
+    Uden nøglen ved siden ikke hvilken uge bedømmelsen bor i, og en
+    fejlklikket tommel ned bliver permanent.
+    """
+    store.tilfoej_historik("2026-W12", [{"navn": "Blomkålssuppe"}], [0])
+    store.saet_bedoemmelse("2026-W12", "Blomkålssuppe", store.NED)
+
+    assert store.historik_oversigt()["nedstemte"] == [
+        {"navn": "Blomkålssuppe", "uge": "2026-W12"}
+    ]
+
+
+def test_oversigt_viser_nyeste_uge_foerst():
+    store.tilfoej_historik("2026-W10", [{"navn": "A"}], [0])
+    store.tilfoej_historik("2026-W12", [{"navn": "B"}], [0])
+    assert [u["uge"] for u in store.historik_oversigt()["uger"]] == [
+        "2026-W12", "2026-W10"
+    ]
+
+
+def test_tom_oversigt_vaelter_ikke():
+    assert store.historik_oversigt() == {
+        "uger": [], "nedstemte": [], "ofte_valgt": [], "ofte_fravalgt": []
+    }

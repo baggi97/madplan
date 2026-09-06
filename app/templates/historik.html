@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block titel %}Historik{% endblock %}
+
+{% block indhold %}
+<div class="hoved">
+  <p class="oejenbryn">Madplan</p>
+  <h1>Hvad har vi spist</h1>
+  <p class="under">De sidste uger, og hvad I syntes om retterne.</p>
+</div>
+
+{% if oversigt.nedstemte %}
+<section class="kort">
+  <h2>Retter vi har sagt fra til</h2>
+  <p class="under">
+    De bliver ikke foreslået igen. Var det et fejlklik, så fortryd her.
+  </p>
+  <ul class="nedstemt-liste">
+    {% for r in oversigt.nedstemte %}
+    <li>
+      <span class="nedstemt-navn">{{ r.navn }}</span>
+      <button class="fortryd" data-fortryd data-uge="{{ r.uge }}" data-navn="{{ r.navn }}">
+        Fortryd
+      </button>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if oversigt.uger %}
+{% for u in oversigt.uger %}
+<section class="kort uge-kort">
+  <h2>
+    Uge {{ u.nummer }}
+    {% if u.pris %}<span class="mini-skilt">{{ u.pris }} kr.</span>{% endif %}
+  </h2>
+  <ul class="spist-liste">
+    {% for ret in u.retter %}
+    <li>
+      <span class="spist-navn">{{ ret.navn }}</span>
+      {% if ret.vurdering == "op" %}<span class="dom god" title="I kunne lide den">God</span>
+      {% elif ret.vurdering == "ned" %}<span class="dom daarlig" title="I sagde fra">Nej tak</span>
+      {% endif %}
+    </li>
+    {% else %}
+    <li class="tom-linje">Ingen retter noteret.</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endfor %}
+
+{% if oversigt.ofte_valgt %}
+<section class="kort">
+  <h2>Går oftest igen</h2>
+  <ul class="tael-liste">
+    {% for navn, antal in oversigt.ofte_valgt %}
+    <li><span>{{ navn }}</span> <span class="tael">{{ antal }}×</span></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% else %}
+<section class="kort">
+  <p class="tom-linje">
+    Der er ikke lavet nogen madplaner endnu. Når den første uge er kørt,
+    står den her.
+  </p>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block script %}
+<script>
+// Fortryd en nedstemning. Samme endpoint som tommelknapperne på ugesiden —
+// det fjerner bedømmelsen når man sender den samme vurdering igen.
+document.querySelectorAll("[data-fortryd]").forEach(function (knap) {
+  knap.addEventListener("click", async function () {
+    knap.disabled = true;
+    const svar = await fetch("/api/uge/" + knap.dataset.uge + "/bedoem", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ navn: knap.dataset.navn, vurdering: "ned" }),
+    });
+    if (svar.ok) {
+      knap.closest("li").remove();
+    } else {
+      knap.disabled = false;
+      knap.textContent = "Kunne ikke fortryde — prøv igen";
+    }
+  });
+});
+</script>
+{% endblock %}

@@ -83,6 +83,7 @@ def tom_uge(noegle: str) -> dict:
         "tilbud": [],
         "forslag": [],
         "valgt": [],        # indeks i forslag-listen
+        "frasorteret": {},  # hvad filterkæden kasserede, og hvorfor
         "egne": [],         # familiens egne retter: {navn, portioner, valgt}
         "madplan": {},      # opskrifter + indkoebsliste
         "afkrydset": {},    # vare-nøgle -> True
@@ -253,3 +254,64 @@ def praeferencesignal(antal_uger: int = 12) -> dict:
         for n in h.get("fravalgt", []):
             fravalgt[n] = fravalgt.get(n, 0) + 1
     return {"ofte_valgt": valgt, "ofte_fravalgt": fravalgt}
+
+
+def historik_oversigt(antal_uger: int = 26) -> dict:
+    """Historikken samlet til visning: hvad blev spist, og hvad syntes I.
+
+    Pris ligger ikke i historikken men i ugefilerne, så den slås op når filen
+    stadig findes. Gamle uger kan være ryddet — så udelades tallet frem for at
+    vise nul, for nul kroner er en påstand, og "vi ved det ikke" er sandheden.
+
+    Hver ret bærer sin ugenøgle med. Uden den kan fortryd-knappen på
+    historiksiden ikke ramme `/api/uge/{noegle}/bedoem`, og så er en
+    fejlklikket tommel ned en permanent udelukkelse.
+    """
+    uger = []
+    for h in reversed(hent_historik()[-antal_uger:]):
+        noegle = h["uge"]
+        bedoemt = h.get("bedoemt") or {}
+        raekke = {
+            "uge": noegle,
+            "nummer": uge_nummer(noegle),
+            "dato": h.get("dato", ""),
+            "retter": [
+                {"navn": n, "vurdering": bedoemt.get(n, "")} for n in h.get("valgt", [])
+            ],
+            "antal_fravalgt": len(h.get("fravalgt", [])),
+            "pris": None,
+        }
+        sti = _sti("uge-{}.json".format(noegle))
+        if sti.exists():
+            uge = hent_uge(noegle)
+            valgte = [
+                r
+                for i, r in enumerate(uge.get("forslag") or [])
+                if i in (uge.get("valgt") or [])
+            ] + [e for e in (uge.get("egne") or []) if e.get("valgt")]
+            if valgte:
+                raekke["pris"] = round(
+                    sum(
+                        float(r.get("pris_pr_portion") or 0) * int(r.get("portioner") or 0)
+                        for r in valgte
+                    )
+                )
+        uger.append(raekke)
+
+    signal = praeferencesignal(antal_uger)
+    nedstemte = [
+        {"navn": navn, "uge": h["uge"]}
+        for h in hent_historik()
+        for navn, vurdering in (h.get("bedoemt") or {}).items()
+        if vurdering == NED
+    ]
+    return {
+        "uger": uger,
+        "nedstemte": nedstemte,
+        "ofte_valgt": sorted(
+            signal["ofte_valgt"].items(), key=lambda kv: -kv[1]
+        )[:8],
+        "ofte_fravalgt": sorted(
+            signal["ofte_fravalgt"].items(), key=lambda kv: -kv[1]
+        )[:8],
+    }

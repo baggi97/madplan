@@ -45,8 +45,12 @@ async def hent_forslag(gennemtving: bool = False) -> None:
             "Fandt kun {} tilbud. REMA's API er sandsynligvis ændret.".format(len(tilbud)),
         )
 
+    # Regnskab over hvad kæden kasserede, så websitet kan sige hvorfor der
+    # kom færre retter end bedt om — i stedet for at grunden kun står i en
+    # log inde i containeren.
+    regnskab: dict = {}
     try:
-        forslag = await ai.foreslaa_retter(tilbud, config.hent_praeferencer())
+        forslag = await ai.foreslaa_retter(tilbud, config.hent_praeferencer(), regnskab)
     except Exception as e:
         return await _fejl(noegle, "Kunne ikke lave forslag: {}".format(e))
 
@@ -63,6 +67,7 @@ async def hent_forslag(gennemtving: bool = False) -> None:
         {
             "tilbud": tilbud,
             "forslag": forslag,
+            "frasorteret": regnskab,
             "valgt": [],
             "madplan": {},
             "afkrydset": {},

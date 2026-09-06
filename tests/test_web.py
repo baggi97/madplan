@@ -403,3 +403,82 @@ def test_skift_fra_op_til_ned(klient):
 def test_ugyldig_bedoemmelse_afvises(klient, krop):
     _uge_spist()
     assert klient.post(f"/api/uge/{UGE}/bedoem", json=krop).status_code == 400
+
+
+# --- historiksiden ----------------------------------------------------
+
+def test_historik_renderer_uden_historik(klient):
+    svar = klient.get("/historik")
+    assert svar.status_code == 200
+    assert "Der er ikke lavet nogen madplaner endnu" in svar.text
+
+
+def test_historik_viser_ugen_og_bedoemmelsen(klient):
+    store.tilfoej_historik(UGE, [ret("Frikadeller"), ret("Fiskefrikadeller")], [0])
+    store.saet_bedoemmelse(UGE, "Frikadeller", store.OP)
+
+    tekst = klient.get("/historik").text
+    assert "Frikadeller" in tekst
+    assert "Uge 35" in tekst
+
+
+def test_nedstemt_ret_faar_en_fortrydknap(klient):
+    store.tilfoej_historik(UGE, [ret("Blomkålssuppe")], [0])
+    store.saet_bedoemmelse(UGE, "Blomkålssuppe", store.NED)
+
+    tekst = klient.get("/historik").text
+    assert "Fortryd" in tekst
+    assert 'data-navn="Blomkålssuppe"' in tekst
+
+
+def test_fortryd_faar_retten_tilbage_i_spil(klient):
+    """Hele pointen med siden.
+
+    `nedstemte_retter()` har ingen tidsgrænse, så uden denne vej ud er et
+    fejlklik en permanent udelukkelse man skal ind i en JSON-fil for at hæve.
+    """
+    store.tilfoej_historik(UGE, [ret("Blomkålssuppe")], [0])
+    store.saet_bedoemmelse(UGE, "Blomkålssuppe", store.NED)
+    assert "Blomkålssuppe" in store.nedstemte_retter()
+
+    svar = klient.post(
+        "/api/uge/{}/bedoem".format(UGE),
+        json={"navn": "Blomkålssuppe", "vurdering": "ned"},
+    )
+    assert svar.status_code == 200
+    assert store.nedstemte_retter() == []
+    assert store.historik_oversigt()["nedstemte"] == []
+
+
+# --- linjen om frasorterede forslag -----------------------------------
+
+def test_frasorteret_vises_naar_der_kom_for_faa(klient, monkeypatch):
+    """Grunden til at der kom 8 og ikke 10 skal kunne læses på siden,
+    ikke kun i en log inde i containeren på NAS'en."""
+    monkeypatch.setattr(web.config, "ANTAL_FORSLAG", 5)
+    uge = store.tom_uge(UGE)
+    uge.update({
+        "status": store.VAELGER,
+        "forslag": [ret("A"), ret("B")],
+        "frasorteret": {"gentagelser": 2, "kostreglerne": 1},
+    })
+    store.gem_uge(uge)
+
+    tekst = klient.get("/uge/{}".format(UGE)).text
+    assert "Vi bad om 5 og fik 2" in tekst
+    assert "2 på gentagelser" in tekst
+    assert "1 på kostreglerne" in tekst
+
+
+def test_frasorteret_er_tavs_naar_alle_forslag_kom(klient, monkeypatch):
+    """Kom der det antal der blev bedt om, er linjen bare støj."""
+    monkeypatch.setattr(web.config, "ANTAL_FORSLAG", 2)
+    uge = store.tom_uge(UGE)
+    uge.update({
+        "status": store.VAELGER,
+        "forslag": [ret("A"), ret("B")],
+        "frasorteret": {"gentagelser": 2},
+    })
+    store.gem_uge(uge)
+
+    assert "Vi bad om" not in klient.get("/uge/{}".format(UGE)).text

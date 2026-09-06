@@ -41,7 +41,17 @@ kostregler:
   # gerne tre aftener på den samme spidskål fordi den er billig.
   maks_gentaget_tilbud: 2
   # Hårde næringskrav pr. portion. Retter der ikke lever op til dem kasseres
-  # i koden. Bemærk at tallene er modellens skøn, ikke en beregning.
+  # i koden.
+  #
+  # Læs IKKE tallene som et næringsmål. De er modellens eget skøn, og målt
+  # 2026-09-01 følger de tærsklen frem for retten: sætter man kravet til 50,
+  # svarer den 50-55; sætter man det til 40, svarer den 40-45. De rigtige tal
+  # — beregnet ud fra DTU's Frida-database — ligger typisk på 20-35 g og vises
+  # på plan-siden.
+  #
+  # Kravet her er altså en grov si mod det åbenlyst utilstrækkelige, ikke en
+  # måling. Skruer man det op, koster det bredde: ved 50 g kom der ingen
+  # vegetarret og elleve af fjorten var danske kødretter.
   naering:
     min_protein_g: 40
     maks_kalorier: 700
