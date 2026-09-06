@@ -65,10 +65,10 @@ push-beskeder virke — kræver det HTTPS. Service workers og Push API'et findes
 simpelthen ikke i browseren uden sikker kontekst, så `http://<NAS-IP>:8099` er
 ikke nok.
 
-**Cloudflare Tunnel er den nemmeste og sikreste vej.** `cloudflared` ligger
-allerede i `docker-compose.synology.yml`. Forbindelsen går *udgående* fra
-NAS'en til Cloudflare, så der skal ikke åbnes en eneste port i routeren, og
-DSM bliver aldrig eksponeret direkte mod internettet.
+**Cloudflare Tunnel er den nemmeste og sikreste vej.** `cloudflared` ligger i
+`docker-compose.infra.yml`. Forbindelsen går *udgående* fra NAS'en til
+Cloudflare, så der skal ikke åbnes en eneste port i routeren, og DSM bliver
+aldrig eksponeret direkte mod internettet.
 
 1. Cloudflare Zero Trust → Networks → **Tunnels** → opret en tunnel, vælg
    **Docker** som miljø
@@ -182,6 +182,31 @@ forsiden i stedet for at bede Claude om at digte en madplan.
 REMA's tilbud skifter om lørdagen, så søndag morgen giver en frisk uge.
 
 ## Deploy på NAS'en
+
+### Fælles infrastruktur først
+
+Tunnelen og den automatiske opdatering ligger i `docker-compose.infra.yml`,
+ikke i madplans eget projekt. De betjener nemlig **flere** containere: én
+tunnel kan have mange public hostnames, og én Watchtower opdaterer alt der
+bærer den rigtige label. Lå de i madplans projekt, ville et
+`docker-compose down` på madplan slukke tunnelen for alt andet også.
+
+```bash
+sudo docker network create proxy        # kun første gang
+mkdir -p /volume1/docker/infra && cd /volume1/docker/infra
+# læg docker-compose.infra.yml og en .env med CLOUDFLARE_TUNNEL_TOKEN her
+sudo docker-compose -f docker-compose.infra.yml up -d
+```
+
+`proxy` er et delt Docker-netværk. Hver app melder sig på det, og så kan
+tunnelen nå dem ved containernavn — `http://madplan:8099`,
+`http://smarthaven:80` — uden at gå om NAS'ens IP og uden åbne porte.
+
+**Der må kun køre én Watchtower.** Den er ikke afgrænset til sit eget
+compose-projekt; den ser hele Docker-socket'en. Kører der to, laver de dobbelt
+arbejde og kan ramme den samme opdatering samtidig.
+
+### Madplan
 
 Imaget bygges af GitHub Actions ved hvert push til `main` og lægges på GHCR som
 `ghcr.io/<ejer>/madplan:latest` — både `linux/amd64` og `linux/arm64`. På

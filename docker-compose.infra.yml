@@ -1,0 +1,45 @@
+# Fælles infrastruktur for NAS'ens containere: tunnelen udefra og den
+# automatiske opdatering. Ligger for sig selv, fordi den betjener MERE end
+# madplan — lå den i madplans projekt, ville et `docker-compose down` på
+# madplan slukke tunnelen for alt andet også.
+#
+#   cd /volume1/docker/infra
+#   sudo docker network create proxy      # kun første gang
+#   sudo docker-compose up -d
+#
+# Filen bor i madplan-repoet af praktiske grunde; den hører ikke til madplan.
+services:
+
+  # Én tunnel kan betjene mange websites. Hver af dem tilføjes som et
+  # "Public hostname" i Cloudflare Zero Trust og peges på containerens navn
+  # og port over proxy-netværket — fx http://madplan:8099 eller
+  # http://smarthaven:80. Ingen porte åbnes i routeren.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - proxy
+
+  # Kigger på registret hvert 5. minut og genstarter mærkede containere når
+  # imaget har ændret sig. --label-enable betyder at KUN containere med
+  # com.centurylinklabs.watchtower.enable=true røres; resten af NAS'en er
+  # fredet.
+  #
+  # Der må kun køre ÉN af dem. Watchtower er ikke afgrænset til sit eget
+  # compose-projekt — den ser hele Docker-socket'en. Kører der to, laver de
+  # dobbelt arbejde og kan ramme den samme opdatering samtidig.
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 300 --cleanup --label-enable
+
+networks:
+  # Oprettes i hånden med `docker network create proxy`, så den overlever at
+  # et enkelt projekt tages ned.
+  proxy:
+    external: true

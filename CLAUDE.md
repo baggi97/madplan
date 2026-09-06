@@ -206,10 +206,24 @@ Tre ting må ikke havne i imaget, og `.dockerignore` holder dem ude:
 `.env` (nøglen), `data/` (ugerne) og `.git`. `data/` og `config/` er volumes,
 så state og præferencer overlever en opdatering.
 
-`cloudflared` i samme compose-fil giver HTTPS udefra uden åbne porte —
-forbindelsen er udgående. Den peger på `madplan:8099` over Docker-netværket,
-ikke på NAS'ens IP. Det er ikke pynt: push virker kun i sikker kontekst.
-Appen har intet login, så noget som Cloudflare Access hører til foran den.
+`cloudflared` og Watchtower ligger i **`docker-compose.infra.yml`**, ikke i
+madplans eget projekt. Begge betjener flere containere end madplan: én tunnel
+kan have mange public hostnames, og Watchtower ser hele Docker-socket'en
+uanset hvilket projekt den står i. Lå de i madplans projekt, ville et
+`down` på madplan slukke tunnelen for alt andet.
+
+De taler sammen over det eksterne netværk `proxy`, som oprettes i hånden og
+derfor overlever at et enkelt projekt tages ned. Tunnelen når apps ved
+containernavn — `http://madplan:8099` — ikke via NAS'ens IP. Verificeret at
+DNS virker på tværs af compose-projekter på et delt eksternt netværk.
+
+Det er ikke pynt: push virker kun i sikker kontekst. Appen har intet login, så
+noget som Cloudflare Access hører til foran den.
+
+**Der må kun køre én Watchtower på NAS'en.** Smarthaven havde længe sin egen
+ved siden af madplans, og de opdaterede hinandens containere — begge har
+`--label-enable`, og begge containere bærer labelen. Dobbelt arbejde, og de kan
+ramme den samme opdatering samtidig.
 
 Dockerfilen har et `HEALTHCHECK` mod `/sundhedstjek`. Det bruger stdlib i
 stedet for `curl`, så imaget ikke skal vokse med en pakke mere.
