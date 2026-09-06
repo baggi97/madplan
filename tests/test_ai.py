@@ -357,3 +357,46 @@ def test_fjern_nedstemte_bruger_samme_navnematch():
 def test_ingen_nedstemte_trimmer_intet():
     ind = [ret("A"), ret("B")]
     assert ai._fjern_nedstemte(ind, []) == ind
+
+
+# --- kald 2 kan også dobbeltkode ---------------------------------------
+# Samme fejl som ramte forslagene, men lav_madplan havde aldrig vaernet.
+# Set 2026-09-06: opskrifter indeholdt en streng, og plan-siden væltede.
+
+def _plan(opskrifter, indkoeb=None):
+    return {"opskrifter": opskrifter, "indkoebsliste": indkoeb if indkoeb is not None else []}
+
+
+def test_madplan_dobbeltkodet_som_streng():
+    god = {"navn": "Karry", "portioner": 4}
+    ud = ai._udpak_madplan(json.dumps(_plan([god]), ensure_ascii=False))
+    assert ud["opskrifter"] == [god]
+
+
+def test_opskrifter_som_streng_pakkes_ud():
+    god = {"navn": "Karry", "portioner": 4}
+    ud = ai._udpak_madplan({"opskrifter": json.dumps([god]), "indkoebsliste": []})
+    assert ud["opskrifter"] == [god]
+
+
+def test_strenge_i_opskriftslisten_kasseres():
+    god = {"navn": "Karry", "portioner": 4}
+    ud = ai._udpak_madplan(_plan(["en streng", None, god]))
+    assert ud["opskrifter"] == [god]
+
+
+def test_opskrift_uden_navn_kasseres():
+    ud = ai._udpak_madplan(_plan([{"portioner": 4}, {"navn": "Karry", "portioner": 4}]))
+    assert [o["navn"] for o in ud["opskrifter"]] == ["Karry"]
+
+
+@pytest.mark.parametrize("svar", ["ikke json", 42, None, {"opskrifter": 7}])
+def test_vroevl_giver_tom_madplan_frem_for_at_vaelte(svar):
+    ud = ai._udpak_madplan(svar)
+    assert ud["opskrifter"] == [] and ud["indkoebsliste"] == []
+
+
+def test_oevrige_felter_bevares():
+    ud = ai._udpak_madplan({"opskrifter": [], "indkoebsliste": [],
+                            "rester": [{"vare": "fløde", "forslag": "brug den"}]})
+    assert ud["rester"]

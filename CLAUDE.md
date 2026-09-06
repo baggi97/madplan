@@ -171,6 +171,52 @@ til fremtidige forslag læses. Samme tryk igen fjerner den, så man kan fortryde
   navnematch som gentagelsesfilteret, men uden tidsgrænse**. En ret man ikke
   kunne lide bliver ikke bedre af at der går fire uger.
 
+### Næringstal fra Frida
+
+Modellens `protein_g` fra kald 1 er et skøn og måler ingenting — det er målt.
+Plan-siden viser derfor et **beregnet** tal ved siden af, fra DTU's Frida.
+
+**Modellen normaliserer sproget, Frida er tabellen.** Kald 2 returnerer
+`raavarer` — rene substantiver med vægt i gram — ved siden af `ingredienser`,
+som stadig er til at læse. Det første forsøg parsede prosaen i stedet, og tre
+af fire retter fik nonsens: opskriften siger "4 danske koteletter", Frida
+hedder `Grisekød, nakkefilet, helt afpudset (Nakkekotelet), rå`. Én forbier på
+proteinkilden, og retten bliver til 7 g.
+
+**Hellere intet tal end et forkert.** Misser en råvare tungere end
+`naering.MIN_VAESENTLIG_GRAM` (150 g), er hele rettens tal upålideligt, og
+skabelonen skriver "næring ukendt". Loggen siger hvad der ikke kunne slås op,
+så aliastabellen kan vokse.
+
+**Aliastabellen valideres når tabellen bygges.** `vaerktoej/lav_frida_tabel.py`
+fejler hvis et navn ikke findes i datasættet. Uden det tjek rådner den tavst:
+et forkert navn falder tilbage på fuzzy-match. Seks af mine første seksten
+navne var forkerte, og fire fandtes slet ikke.
+
+**Præfiks tæller kun når ordene er nogenlunde lige lange.** Uden den regel
+bliver `mel` til `Melbanan` og `mælk` til `Mælkebøtte` — med 0,90 i sikkerhed.
+En matcher der tager konfident fejl er værre end en der melder pas.
+
+Sådan genskabes tabellen når Frida udgiver en ny version:
+
+```bash
+# hent regnearket fra https://fcdb.fooddata.dk/data
+python vaerktoej/lav_frida_tabel.py FCDB_6.1_Dataset.xlsx
+```
+
+Regnearket er 13 MB og ligger i `.gitignore`; kun `app/frida.json` på ~97 kB
+commites. `openpyxl` er en udviklingsafhængighed — runtime læser kun JSON.
+
+**Frida er rå råvarer.** Vægten er som varen købes, ikke som den serveres —
+kogt ris vejer tre gange tørret. Det er den rigtige fortolkning for en madplan,
+men ret det ikke uden at tænke over det.
+
+**De to tal stemmer ikke.** Forslagssiden viser modellens skøn, plan-siden det
+beregnede. Målt 2026-09-06 på en rigtig uge: modellen sagde 42-45 g, beregnet
+gav 20-35 g. Beregningen er den rigtige — 400 g nakkefilet til fire personer
+*er* 20 g protein pr. portion. Det er ikke en fejl at de er forskellige; det er
+hele pointen.
+
 ### Tilstandsmaskine
 
 En uge går gennem `tom → arbejder → vaelger → arbejder → klar`, med `fejl` som
@@ -562,7 +608,10 @@ stadig ordentligt ud.
   i en `<button>` er ugyldig HTML som browseren river fra hinanden. Kortets
   udseende og `er-valgt` hænger derfor på `<li>`, mens `.ret` kun er den
   klikbare del. `app.js` skifter klasse via `knap.closest(".ret-kort")`.
-- **Modellen dobbeltkoder af og til hele svaret som en JSON-streng.** Set i
+- **Modellen dobbeltkoder af og til hele svaret som en JSON-streng — i begge
+  kald.** `ai._udpak_retter()` værner kald 1 og `ai._udpak_madplan()` kald 2.
+  Sidstnævnte manglede indtil 2026-09-06, hvor `opskrifter` indeholdt en streng
+  og plan-siden væltede med en uforståelig `AttributeError`. Set i
   praksis 2026-08-29: `input` var `{"retter": "{\"retter\": [...]}"}` i stedet
   for et objekt. Uden `ai._udpak_retter()` løber valideringen hen over strengen
   tegn for tegn, logger 250 advarsler og kasserer alt — og det oprindelige

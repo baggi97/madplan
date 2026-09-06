@@ -1,6 +1,10 @@
 # Hemmeligheder
 .env
 
+# Frida-regnearket. 13 MB reference-data hoerer ikke i et repo hvor alt
+# andet er tekst. Kun den destillerede app/frida.json commites.
+FCDB_*.xlsx
+
 # Kørselsdata
 data/*.json
 data/*.tmp

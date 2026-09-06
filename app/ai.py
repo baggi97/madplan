@@ -122,6 +122,34 @@ VAERKTOEJ_MADPLAN = {
                             "description": "Nummererede trin, ét pr. element.",
                         },
                         "tip": {"type": "string", "description": "Valgfrit tip. Kan være tom."},
+                        "raavarer": {
+                            "type": "array",
+                            "description": (
+                                "SAMME ingredienser, men normaliseret til opslag "
+                                "i en næringstabel. Ét rent substantiv pr. post "
+                                "og vægten i gram — regn selv om fra dl, spsk og "
+                                "stykker. Udelad krydderier, salt og peber."
+                            ),
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "raavare": {
+                                        "type": "string",
+                                        "description": (
+                                            "Råvarens almindelige danske navn i "
+                                            "ental, uden tilberedning: "
+                                            "'svinekotelet', ikke '4 danske "
+                                            "koteletter, stegte'."
+                                        ),
+                                    },
+                                    "gram": {
+                                        "type": "integer",
+                                        "description": "Vægt i gram for HELE retten.",
+                                    },
+                                },
+                                "required": ["raavare", "gram"],
+                            },
+                        },
                     },
                     "required": ["navn", "portioner", "tid_min", "ingredienser", "fremgangsmaade"],
                 },
@@ -427,6 +455,56 @@ def _haandhaev_lofter(retter: list[dict], regler: dict) -> list[dict]:
             talt[m] = talt.get(m, 0) + 1
         ok.append(ret)
     return ok
+
+
+def _udpak_madplan(svar: dict) -> dict:
+    """Samme værn om kald 2 som `_udpak_retter()` giver kald 1.
+
+    Modellen dobbeltkoder af og til hele svaret som en JSON-streng, og den
+    fejl rammer begge kald — kald 2 havde bare aldrig værnet. Set i praksis
+    2026-09-06: `opskrifter` indeholdt en streng, og plan-siden væltede med en
+    uforståelig AttributeError.
+
+    Poster der ikke er objekter kasseres frem for at nå ud i skabelonen.
+    """
+    if isinstance(svar, str):
+        try:
+            svar = json.loads(svar)
+            log.warning("Madplanen kom dobbeltkodet som JSON-streng — pakket ud")
+        except json.JSONDecodeError:
+            log.error("Madplanen er en streng der ikke er JSON")
+            return {"opskrifter": [], "indkoebsliste": []}
+    if not isinstance(svar, dict):
+        log.error("Forventede et objekt fra kald 2, fik %s", type(svar).__name__)
+        return {"opskrifter": [], "indkoebsliste": []}
+
+    def kun_objekter(navn, paakraevet):
+        raa = svar.get(navn)
+        if isinstance(raa, str):
+            try:
+                raa = json.loads(raa)
+                log.warning("'%s' kom som JSON-streng — pakket ud", navn)
+            except json.JSONDecodeError:
+                raa = None
+        if not isinstance(raa, list):
+            log.warning("'%s' er ikke en liste", navn)
+            return []
+        ok = []
+        for post in raa:
+            if not isinstance(post, dict):
+                log.warning("Kasserer post i '%s' der ikke er et objekt: %.60r", navn, post)
+                continue
+            if any(post.get(f) in (None, "") for f in paakraevet):
+                log.warning("Kasserer post i '%s' — mangler felter", navn)
+                continue
+            ok.append(post)
+        return ok
+
+    return {
+        **svar,
+        "opskrifter": kun_objekter("opskrifter", ("navn", "portioner")),
+        "indkoebsliste": kun_objekter("indkoebsliste", ("afdeling",)),
+    }
 
 
 def _praeferencetekst(praef: dict) -> str:
@@ -936,6 +1014,11 @@ async def lav_madplan(valgte: list[dict], tilbud: list[dict], praef: dict) -> di
         "Ost, Kød & fisk, Frost, Kolonial. Marker hvilke varer der er på tilbud.\n\n"
         "Retterne kan have forskelligt antal personer. Indkøbslisten skal "
         "dække summen af dem alle.\n\n"
+        "Udfyld `raavarer` for hver opskrift: de samme ingredienser, men som "
+        "rene substantiver med vægt i gram. Det bruges til at slå næringsindhold "
+        "op i en tabel, så navnet skal være råvarens almindelige danske navn "
+        "uden tilberedning eller mærke. Kan en ingrediens ikke koges ned til "
+        "sådan et navn, så lad den være — vi hellere udelader end gætter.\n\n"
         "Fyld til sidst `rester` ud: varer der bliver reelt tilovers fordi de "
         "sælges i større enheder end retterne bruger — en halv dåse kokosmælk, "
         "resten af grønkålen. Skriv hvad de kan bruges til, og peg gerne på en "
@@ -955,5 +1038,5 @@ async def lav_madplan(valgte: list[dict], tilbud: list[dict], praef: dict) -> di
         "i opskrifterne, men skriv det ikke på listen."
     )
 
-    madplan = await _kald(system, besked, VAERKTOEJ_MADPLAN, 8000)
+    madplan = _udpak_madplan(await _kald(system, besked, VAERKTOEJ_MADPLAN, 8000))
     return _fjern_basisvarer(madplan, praef)

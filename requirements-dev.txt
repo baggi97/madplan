@@ -2,3 +2,6 @@
 # tests/ ude, og Dockerfilen installerer kun requirements.txt.
 -r requirements.txt
 pytest==8.3.4
+
+# Kun til vaerktoej/lav_frida_tabel.py
+openpyxl==3.1.5

@@ -71,6 +71,14 @@
       <p class="opskrift-meta">
         {% if opskrift.dag %}<span class="dag-maerkat">{{ opskrift.dag|capitalize }}</span>{% endif %}
         {{ opskrift.portioner }} portioner · {{ opskrift.tid_min }} min
+        {% if opskrift.naering and opskrift.naering.sikker %}
+        · <span class="naering">{{ opskrift.naering.protein_g }} g protein ·
+          {{ opskrift.naering.kalorier }} kcal</span>
+        {% elif opskrift.naering %}
+        · <span class="naering naering-usikker"
+                title="Kunne ikke slå {{ opskrift.naering.manglende|join(', ') }} op">
+            næring ukendt</span>
+        {% endif %}
       </p>
     </header>
 

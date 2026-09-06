@@ -811,3 +811,8 @@ li { list-style: none; }
   border-color: var(--blaek);
   background: var(--papir);
 }
+
+/* Beregnet af opskriftens mængder mod DTU's Frida — ikke modellens skøn.
+   Derfor grøn, som de øvrige tal vi står inde for. */
+.naering { color: var(--groen); font-weight: 600; }
+.naering-usikker { color: var(--graa); font-weight: 400; cursor: help; }

@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import config, flow, push, store
+from . import config, flow, naering, push, store
 
 log = logging.getLogger(__name__)
 
@@ -80,7 +80,16 @@ def _med_dage(uge: dict) -> dict:
         for r in (uge.get("forslag") or []) + (uge.get("egne") or [])
         if r.get("navn")
     }
-    beriget = [{**o, "dag": dag_for.get(o.get("navn"), "")} for o in opskrifter]
+    beriget = [
+        {
+            **o,
+            "dag": dag_for.get(o.get("navn"), ""),
+            # Beregnes ved rendering frem for at gemmes, så en forbedret
+            # Frida-tabel slår igennem på gamle uger med det samme.
+            "naering": naering.beregn(o.get("raavarer"), o.get("portioner") or 0),
+        }
+        for o in opskrifter
+    ]
     # Uden dag sidst; ellers ugens rækkefølge
     beriget.sort(key=lambda o: DAGE.index(o["dag"]) if o["dag"] in DAGE else len(DAGE))
     return {**madplan, "opskrifter": beriget}
